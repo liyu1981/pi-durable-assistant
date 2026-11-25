@@ -5,6 +5,17 @@ import type { Management } from "../api/types";
 import { currentConversationIdAtom, managementAtom } from "../atoms";
 import { formatTime, newRequestId } from "../lib/format";
 import { useToast } from "../lib/useToast";
+import { Badge, Button, Field, SectionTitle, StatusMessage } from "./ui";
+
+type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
+
+function statusTone(status: string): Tone {
+  if (status === "active") return "success";
+  if (status === "paused" || status === "scheduled") return "warning";
+  if (status === "failed" || status === "error" || status === "cancelled") return "danger";
+  if (status === "running") return "accent";
+  return "neutral";
+}
 
 export function TaskCenter() {
   const currentId = useAtomValue(currentConversationIdAtom);
@@ -24,7 +35,10 @@ export function TaskCenter() {
     try {
       setManagement(await get<Management>(`/api/conversations/${currentId}/management`));
     } catch (error) {
-      toast(`读取任务失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(
+        `Failed to load tasks: ${error instanceof Error ? error.message : String(error)}`,
+        "warning",
+      );
     }
   }, [currentId, setManagement, toast]);
 
@@ -42,54 +56,54 @@ export function TaskCenter() {
   }, [refresh]);
 
   const run = async (label: string, action: () => Promise<unknown>) => {
-    setFeedback("正在处理…");
+    setFeedback("Working...");
     try {
       await action();
-      setFeedback(`${label}完成`);
+      setFeedback(`${label} complete`);
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setFeedback(`${label}失败：${message}`);
-      toast(`${label}失败：${message}`, "warning");
+      setFeedback(`${label} failed: ${message}`);
+      toast(`${label} failed: ${message}`, "warning");
     }
   };
 
   const base = currentId === null ? "" : `/api/conversations/${currentId}`;
+  const disabled = currentId === null;
 
   return (
     <>
       <section>
-        <div className="card-title">持久任务中心</div>
-        <p className="empty-note">
-          {currentId === null
-            ? "选择会话后才能管理计划任务和后台任务；记忆与技能不依赖会话。"
-            : `当前会话 #${currentId}`}
+        <SectionTitle>Task center</SectionTitle>
+        <p className="text-sm text-primary/70">
+          {disabled
+            ? "Select a conversation to manage schedules and background jobs. Memory and skills do not require one."
+            : `Conversation #${currentId}`}
         </p>
-        <p className="feedback" role="status" aria-live="polite">
-          {feedback}
-        </p>
-        <div className="row-between">
+        <div className="mt-2">
+          <StatusMessage>{feedback}</StatusMessage>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
           {currentId === null ? (
-            <button type="button" className="btn" disabled>
-              导出 Markdown
-            </button>
+            <Button disabled>Export Markdown</Button>
           ) : (
             <a className="btn" href={exportUrl(currentId)} download>
-              导出 Markdown
+              Export Markdown
             </a>
           )}
-          <button type="button" className="btn" onClick={() => void refresh()}>
-            刷新
-          </button>
+          <Button variant="quiet" onClick={() => void refresh()}>
+            Refresh
+          </Button>
         </div>
       </section>
 
       <section>
-        <div className="card-title">创建计划任务</div>
+        <SectionTitle>New schedule</SectionTitle>
         <form
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void run("创建计划任务", async () => {
+            void run("Create schedule", async () => {
               await post(`${base}/schedules`, {
                 text: scheduleText,
                 minutesFromNow: Number(minutes),
@@ -100,191 +114,212 @@ export function TaskCenter() {
             });
           }}
         >
-          <label>
-            任务内容
+          <Field label="Task text">
             <input
+              className="field"
               name="text"
               maxLength={1000}
               required
-              disabled={currentId === null}
+              disabled={disabled}
               value={scheduleText}
-              placeholder="例如：检查项目更新"
+              placeholder="e.g. Check for project updates"
               onChange={(event) => setScheduleText(event.target.value)}
             />
-          </label>
-          <div className="row-between">
-            <label>
-              多少分钟后开始
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Start in (minutes)">
               <input
+                className="field"
                 name="minutesFromNow"
                 type="number"
                 min="0.25"
                 max="525600"
                 step="any"
                 required
-                disabled={currentId === null}
+                disabled={disabled}
                 value={minutes}
                 onChange={(event) => setMinutes(event.target.value)}
               />
-            </label>
-            <label>
-              每隔多少分钟（0 单次）
+            </Field>
+            <Field label="Repeat every (0 = once)">
               <input
+                className="field"
                 name="everyMinutes"
                 type="number"
                 min="0"
                 max="525600"
                 step="any"
                 required
-                disabled={currentId === null}
+                disabled={disabled}
                 value={every}
                 onChange={(event) => setEvery(event.target.value)}
               />
-            </label>
+            </Field>
           </div>
-          <button type="submit" className="btn btn-primary" disabled={currentId === null}>
-            创建任务
-          </button>
+          <Button type="submit" variant="primary" disabled={disabled}>
+            Create schedule
+          </Button>
         </form>
       </section>
 
       <section>
-        <div className="card-title">后台子 Agent</div>
+        <SectionTitle>Background subagent</SectionTitle>
         <form
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void run("创建后台任务", async () => {
+            void run("Create background job", async () => {
               await post(`${base}/background`, { text: backgroundText, requestId: newRequestId() });
               setBackgroundText("");
             });
           }}
         >
-          <label>
-            任务说明
+          <Field label="Instructions">
             <textarea
+              className="field min-h-20 resize-y"
               name="text"
               maxLength={4000}
               required
-              disabled={currentId === null}
+              disabled={disabled}
               value={backgroundText}
-              placeholder="描述需要独立完成的工作"
+              placeholder="Describe the work to complete independently"
               onChange={(event) => setBackgroundText(event.target.value)}
             />
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={currentId === null}>
-            后台执行
-          </button>
+          </Field>
+          <Button type="submit" variant="primary" disabled={disabled}>
+            Run in background
+          </Button>
         </form>
       </section>
 
       <section>
-        <div className="card-title">计划任务</div>
+        <SectionTitle>Schedules</SectionTitle>
         {(management?.schedules ?? []).length === 0 ? (
-          <p className="empty-note">暂无计划任务</p>
+          <p className="text-sm text-primary/70">No schedules yet.</p>
         ) : (
-          (management?.schedules ?? []).map((item) => (
-            <div className="todo" key={item.id}>
-              <span title={item.id}>
-                {item.text} · {item.status} · 已执行 {item.runs} 次
-                {item.nextAt ? ` · 下次 ${formatTime(item.nextAt)}` : ""}
-              </span>
-              <span className="row-between">
-                {item.status === "active" ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      void run("暂停", () => post(`${base}/schedules/${item.id}/pause`))
-                    }
-                  >
-                    暂停
-                  </button>
-                ) : null}
-                {item.status === "paused" ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      void run("继续", () => post(`${base}/schedules/${item.id}/resume`))
-                    }
-                  >
-                    继续
-                  </button>
-                ) : null}
-                {item.status === "active" || item.status === "paused" ? (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run("取消", () => post(`${base}/schedules/${item.id}/cancel`))
-                    }
-                  >
-                    取消
-                  </button>
-                ) : null}
-              </span>
-            </div>
-          ))
+          <ul className="flex flex-col">
+            {(management?.schedules ?? []).map((item) => (
+              <li key={item.id} className="border-b border-primary/15 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm" title={item.id}>
+                    {item.text}
+                  </span>
+                  <Badge tone={statusTone(item.status)}>{item.status}</Badge>
+                </div>
+                <p className="label mt-1 text-primary/70">
+                  {item.runs} runs
+                  {item.nextAt ? ` - next ${formatTime(item.nextAt)}` : ""}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item.status === "active" ? (
+                    <Button
+                      variant="quiet"
+                      onClick={() =>
+                        void run("Pause", () => post(`${base}/schedules/${item.id}/pause`))
+                      }
+                    >
+                      Pause
+                    </Button>
+                  ) : null}
+                  {item.status === "paused" ? (
+                    <Button
+                      variant="quiet"
+                      onClick={() =>
+                        void run("Resume", () => post(`${base}/schedules/${item.id}/resume`))
+                      }
+                    >
+                      Resume
+                    </Button>
+                  ) : null}
+                  {item.status === "active" || item.status === "paused" ? (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void run("Cancel", () => post(`${base}/schedules/${item.id}/cancel`))
+                      }
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
       <section>
-        <div className="card-title">提醒</div>
+        <SectionTitle>Reminders</SectionTitle>
         {(management?.reminders ?? []).length === 0 ? (
-          <p className="empty-note">暂无提醒</p>
+          <p className="text-sm text-primary/70">No reminders yet.</p>
         ) : (
-          (management?.reminders ?? []).map((item) => (
-            <div className="todo" key={item.id}>
-              <span>
-                ⏰ {item.text} · {formatTime(item.at)} · {item.status}
-              </span>
-              {item.status === "scheduled" ? (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() =>
-                    void run("取消提醒", () => post(`${base}/reminders/${item.id}/cancel`))
-                  }
-                >
-                  取消提醒
-                </button>
-              ) : null}
-            </div>
-          ))
+          <ul className="flex flex-col">
+            {(management?.reminders ?? []).map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-primary/15 py-2"
+              >
+                <span className="text-sm">
+                  {item.text} - {formatTime(item.at)}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Badge tone={statusTone(item.status)}>{item.status}</Badge>
+                  {item.status === "scheduled" ? (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void run("Cancel reminder", () =>
+                          post(`${base}/reminders/${item.id}/cancel`),
+                        )
+                      }
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
       <section>
-        <div className="card-title">后台任务</div>
+        <SectionTitle>Background jobs</SectionTitle>
         {(management?.background ?? []).length === 0 ? (
-          <p className="empty-note">暂无后台任务</p>
+          <p className="text-sm text-primary/70">No background jobs yet.</p>
         ) : (
-          (management?.background ?? []).map((item) => (
-            <div className="todo" key={item.id}>
-              <span title={item.id}>
-                {item.text} · {item.status}
-                {item.result ? ` · ${item.result.slice(0, 200)}` : ""}
-              </span>
-              <span className="row-between">
-                {item.conversationId !== null ? (
-                  <a className="btn" href={`#${item.conversationId}`}>
-                    查看对话
-                  </a>
+          <ul className="flex flex-col">
+            {(management?.background ?? []).map((item) => (
+              <li key={item.id} className="border-b border-primary/15 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm" title={item.id}>
+                    {item.text}
+                  </span>
+                  <Badge tone={statusTone(item.status)}>{item.status}</Badge>
+                </div>
+                {item.result ? (
+                  <p className="mt-1 text-sm text-primary/70">{item.result.slice(0, 200)}</p>
                 ) : null}
-                {item.status === "running" ? (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run("停止", () => post(`${base}/background/${item.id}/stop`))
-                    }
-                  >
-                    停止
-                  </button>
-                ) : null}
-              </span>
-            </div>
-          ))
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item.conversationId !== null ? (
+                    <a className="btn" href={`#${item.conversationId}`}>
+                      View conversation
+                    </a>
+                  ) : null}
+                  {item.status === "running" ? (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void run("Stop", () => post(`${base}/background/${item.id}/stop`))
+                      }
+                    >
+                      Stop
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </>

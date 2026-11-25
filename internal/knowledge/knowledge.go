@@ -42,11 +42,11 @@ func AllowedRoots(root string, allow []string) []string {
 
 func resolve(roots []string, rel string) (string, error) {
 	if len(roots) == 0 {
-		return "", errors.New("知识库未启用：请设置 OBSIDIAN_ROOT")
+		return "", errors.New("knowledge base is disabled; set OBSIDIAN_ROOT")
 	}
 	clean := filepath.Clean(strings.ReplaceAll(rel, "\\", "/"))
 	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-		return "", errors.New("路径不合法")
+		return "", errors.New("invalid path")
 	}
 	for _, root := range roots {
 		absRoot, err := filepath.Abs(root)
@@ -64,7 +64,7 @@ func resolve(roots []string, rel string) (string, error) {
 		}
 		return candidate, nil
 	}
-	return "", errors.New("路径不在允许范围内")
+	return "", errors.New("path is not allowlisted")
 }
 
 // Match is one search hit.
@@ -81,7 +81,7 @@ func Search(roots []string, query string, includeHistorical bool) ([]Match, erro
 		return []Match{}, nil
 	}
 	if len([]rune(query)) > 200 {
-		return nil, errors.New("查询词太长")
+		return nil, errors.New("query too long")
 	}
 	needle := strings.ToLower(query)
 	hits := []Match{}
@@ -109,7 +109,7 @@ func Search(roots []string, query string, includeHistorical bool) ([]Match, erro
 				if !strings.Contains(strings.ToLower(line), needle) {
 					continue
 				}
-				if !includeHistorical && strings.Contains(line, "归档") {
+				if !includeHistorical && strings.Contains(line, "Archive") {
 					continue
 				}
 				rel, _ := filepath.Rel(root, path)
@@ -138,10 +138,10 @@ func Read(roots []string, rel string, line int) (string, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", errors.New("文件不存在或不可读")
+		return "", errors.New("file not found or unreadable")
 	}
 	if !utf8.Valid(data) {
-		return "", errors.New("文件不是 UTF-8 文本")
+		return "", errors.New("file is not UTF-8 text")
 	}
 	lines := strings.Split(string(data), "\n")
 	if line < 1 {
@@ -168,7 +168,7 @@ func Read(roots []string, rel string, line int) (string, error) {
 // Status describes the knowledge configuration for the UI.
 func Status(root string) map[string]any {
 	if root == "" {
-		return map[string]any{"enabled": false, "reason": "未配置 OBSIDIAN_ROOT"}
+		return map[string]any{"enabled": false, "reason": "OBSIDIAN_ROOT not configured"}
 	}
 	return map[string]any{"enabled": true, "rootConfigured": true}
 }
@@ -179,7 +179,7 @@ var Extension = harness.DefineExtension(durable.Extension{
 	Tools: []*durable.ToolRegistration{
 		harness.DefineTool(durable.ToolRegistration{
 			ToolSchema: ai.ToolSchema{
-				Name: "search_knowledge", Description: "在用户允许的笔记库中搜索，返回路径和行号",
+				Name: "search_knowledge", Description: "Search the user's allowlisted notes and return paths with line numbers",
 				Parameters: map[string]any{"type": "object", "properties": map[string]any{
 					"query": map[string]any{"type": "string"}, "includeHistorical": map[string]any{"type": "boolean"},
 				}, "required": []any{"query"}},
@@ -194,7 +194,7 @@ var Extension = harness.DefineExtension(durable.Extension{
 					return textResult(err.Error()), nil
 				}
 				if len(hits) == 0 {
-					return textResult("没有找到相关内容。"), nil
+					return textResult("No matching content found."), nil
 				}
 				lines := []string{}
 				for _, hit := range hits {
@@ -205,7 +205,7 @@ var Extension = harness.DefineExtension(durable.Extension{
 		}),
 		harness.DefineTool(durable.ToolRegistration{
 			ToolSchema: ai.ToolSchema{
-				Name: "read_knowledge", Description: "读取用户笔记库中一个文件的指定行（只读）",
+				Name: "read_knowledge", Description: "Read a line range from one allowlisted note (read-only)",
 				Parameters: map[string]any{"type": "object", "properties": map[string]any{
 					"path": map[string]any{"type": "string"}, "line": map[string]any{"type": "number"},
 				}, "required": []any{"path"}},

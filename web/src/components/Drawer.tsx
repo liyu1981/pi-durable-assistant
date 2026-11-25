@@ -4,6 +4,13 @@ import { drawerAtom } from "../atoms";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PersonalPanel } from "./PersonalPanel";
 import { TaskCenter } from "./TaskCenter";
+import { Button } from "./ui";
+
+const TABS = [
+  { key: "tasks", label: "Tasks" },
+  { key: "personal", label: "Memory & skills" },
+  { key: "knowledge", label: "Knowledge" },
+] as const;
 
 export function Drawer() {
   const [drawer, setDrawer] = useAtom(drawerAtom);
@@ -30,7 +37,7 @@ export function Drawer() {
       }
       if (event.key !== "Tab" || !drawerRef.current) return;
       const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -49,35 +56,42 @@ export function Drawer() {
 
   if (!drawer.open) return null;
   const close = () => setDrawer((previous) => ({ ...previous, open: false }));
-  const tabs = [
-    { key: "tasks", label: "任务中心" },
-    { key: "personal", label: "记忆与技能" },
-    { key: "knowledge", label: "知识检索" },
-  ] as const;
 
   return (
     <>
-      <button type="button" className="drawer-backdrop" aria-label="关闭面板" onClick={close} />
+      <button
+        type="button"
+        className="fixed inset-0 z-40 bg-primary/50"
+        aria-label="Close panel"
+        onClick={close}
+      />
       <aside
         ref={drawerRef}
-        className="drawer"
+        className="fixed bottom-0 right-0 top-0 z-50 flex w-full max-w-[480px] flex-col border-l border-primary bg-surface shadow-none"
         role="dialog"
         aria-modal="true"
-        aria-label="管理面板"
+        aria-label="Management panel"
       >
-        <div className="row-between">
-          <span className="card-title">管理面板</span>
-          <button type="button" className="btn" ref={closeRef} onClick={close}>
-            关闭
-          </button>
-        </div>
-        <div className="tabs" role="tablist" aria-label="管理面板">
-          {tabs.map((tab) => (
+        <header className="flex items-start justify-between gap-3 border-b border-primary px-4 py-4">
+          <div>
+            <p className="label">Tools</p>
+            <h2 className="font-display text-xl font-bold tracking-tight">Management</h2>
+          </div>
+          <Button ref={closeRef} variant="quiet" onClick={close}>
+            Close
+          </Button>
+        </header>
+        <div
+          className="flex gap-2 border-b border-primary/20 px-4 py-3"
+          role="tablist"
+          aria-label="Management panel"
+        >
+          {TABS.map((tab) => (
             <button
               type="button"
-              className="tab"
               role="tab"
               aria-selected={drawer.panel === tab.key}
+              className="tab"
               key={tab.key}
               onClick={() => setDrawer({ open: true, panel: tab.key })}
             >
@@ -85,9 +99,11 @@ export function Drawer() {
             </button>
           ))}
         </div>
-        {drawer.panel === "tasks" ? <TaskCenter /> : null}
-        {drawer.panel === "personal" ? <PersonalPanel /> : null}
-        {drawer.panel === "knowledge" ? <KnowledgePanel /> : null}
+        <div className="scroll-area flex-1 space-y-8 px-4 py-6">
+          {drawer.panel === "tasks" ? <TaskCenter /> : null}
+          {drawer.panel === "personal" ? <PersonalPanel /> : null}
+          {drawer.panel === "knowledge" ? <KnowledgePanel /> : null}
+        </div>
       </aside>
     </>
   );

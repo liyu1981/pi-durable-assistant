@@ -13,6 +13,7 @@ import {
 } from "../atoms";
 import { makeKeyFactory, newRequestId } from "../lib/format";
 import { useToast } from "../lib/useToast";
+import { Button, CheckboxField } from "./ui";
 
 const TEXT_EXTENSIONS = new Set([
   "txt",
@@ -105,16 +106,16 @@ async function processFile(
   const ext = extension(name);
   const mime = file.type.toLowerCase().split(";")[0].trim();
   if (mime === "image/svg+xml" || ext === "svg") {
-    return { error: "暂不支持 SVG，请上传图片或文本类文件" };
+    return { error: "SVG files are not supported. Upload an image or a text file." };
   }
   const isGif = mime === "image/gif" || ext === "gif";
   const isImage = IMAGE_MIMES.has(mime) || IMAGE_EXTENSIONS.has(ext);
   const isText = mime.startsWith("text/") || TEXT_EXTENSIONS.has(ext);
-  if (!isImage && !isText) return { error: `「${name}」不是支持的图片或文本文件` };
+  if (!isImage && !isText) return { error: `"${name}" is not a supported image or text file` };
 
   if (isImage) {
     if (isGif) {
-      if (file.size > MAX_IMAGE) return { error: `GIF「${name}」超过 5MB` };
+      if (file.size > MAX_IMAGE) return { error: `GIF "${name}" exceeds 5 MB` };
       return {
         attachment: {
           kind: "image",
@@ -132,12 +133,12 @@ async function processFile(
       image = new Image();
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
-        image.onerror = () => reject(new Error(`图片「${name}」加载失败`));
+        image.onerror = () => reject(new Error(`Image "${name}" could not be loaded`));
         image.src = objectUrl;
       });
     } catch (error) {
       URL.revokeObjectURL(objectUrl);
-      return { error: error instanceof Error ? error.message : "图片加载失败" };
+      return { error: error instanceof Error ? error.message : "Image could not be loaded" };
     }
     const maxDimension = Math.max(image.naturalWidth, image.naturalHeight);
     if (maxDimension > 2048 || file.size > 1.5 * 1024 * 1024) {
@@ -150,16 +151,19 @@ async function processFile(
       const context = canvas.getContext("2d");
       if (!context) {
         URL.revokeObjectURL(objectUrl);
-        return { error: "浏览器不支持图片压缩" };
+        return { error: "This browser does not support image compression" };
       }
-      context.fillStyle = "#ffffff";
+      const surface = getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-surface")
+        .trim();
+      context.fillStyle = surface || "white";
       context.fillRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
       URL.revokeObjectURL(objectUrl);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
       const base64 = dataUrl.split(",")[1] ?? "";
       const size = Math.round((base64.length * 3) / 4);
-      if (size > MAX_IMAGE) return { error: `图片压缩后仍超过 5MB` };
+      if (size > MAX_IMAGE) return { error: "Image is still over 5 MB after compression" };
       return {
         attachment: {
           kind: "image",
@@ -173,7 +177,7 @@ async function processFile(
     }
     if (file.size > MAX_IMAGE) {
       URL.revokeObjectURL(objectUrl);
-      return { error: `图片「${name}」超过 5MB` };
+      return { error: `Image "${name}" exceeds 5 MB` };
     }
     return {
       attachment: {
@@ -188,15 +192,15 @@ async function processFile(
     };
   }
 
-  if (file.size > MAX_TEXT) return { error: `文本文件「${name}」超过 200KB` };
+  if (file.size > MAX_TEXT) return { error: `Text file "${name}" exceeds 200 KB` };
   const buffer = await file.arrayBuffer();
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
   } catch {
-    return { error: `「${name}」不是 UTF-8 文本` };
+    return { error: `"${name}" is not UTF-8 text` };
   }
-  if (text.includes("\u0000")) return { error: `「${name}」不是文本文件` };
+  if (text.includes("\u0000")) return { error: `"${name}" is not a text file` };
   return {
     attachment: {
       kind: "text",
@@ -234,7 +238,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
       const incoming = Array.from(files);
       if (incoming.length === 0) return;
       if (attachments.length + incoming.length > MAX_FILES) {
-        toast("一次最多上传 5 个附件", "warning");
+        toast("At most 5 attachments per message", "warning");
         return;
       }
       let total = attachments.reduce((sum, item) => sum + item.size, 0);
@@ -251,7 +255,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
             if (result.attachment.previewUrl?.startsWith("blob:")) {
               URL.revokeObjectURL(result.attachment.previewUrl);
             }
-            toast("附件总大小不能超过 10MB", "warning");
+            toast("Total attachment size must stay under 10 MB", "warning");
             continue;
           }
           if (result.attachment) {
@@ -260,7 +264,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
             setAttachments((previous) => [...previous, result.attachment as PendingAttachment]);
           }
         } catch (error) {
-          toast(error instanceof Error ? error.message : "处理文件失败", "warning");
+          toast(error instanceof Error ? error.message : "Failed to process the file", "warning");
         }
       }
     },
@@ -268,7 +272,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   );
 
   useEffect(() => {
-    const column = document.querySelector<HTMLElement>(".chat-column");
+    const column = document.querySelector<HTMLElement>("[data-chat-column]");
     if (!column) return;
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes("Files");
@@ -342,7 +346,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
       setAttachments([]);
       onSent();
     } catch (error) {
-      toast(`发送失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      toast(`Failed to send: ${error instanceof Error ? error.message : String(error)}`, "error");
     } finally {
       setSending(false);
       textareaRef.current?.focus();
@@ -354,7 +358,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
     try {
       await post(`/api/conversations/${currentId}/abort`);
     } catch (error) {
-      toast(`停止失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(`Failed to stop: ${error instanceof Error ? error.message : String(error)}`, "warning");
     }
   };
 
@@ -367,114 +371,131 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   const canSend = (draft.trim().length > 0 || attachments.length > 0) && !sending;
 
   return (
-    <footer className="composer">
-      {dragging ? <div className="drop-overlay">拖放文件到此处上传（最多 5 个）</div> : null}
-      <div className="composer-controls">
-        <div className="row-between">
-          {busy ? (
-            <label className="label">
-              <input
-                type="checkbox"
-                checked={steer}
-                onChange={(event) => setSteer(event.target.checked)}
-              />
-              插话（steer）
-            </label>
-          ) : (
-            <span className="label">Enter 发送 · Shift+Enter 换行</span>
-          )}
-          {busy ? (
-            <button type="button" className="btn btn-danger" onClick={() => void stop()}>
-              ⏹ 停止
-            </button>
-          ) : null}
-        </div>
-        {(view?.inbox ?? 0) > 0 ? <span className="label">排队中：{view?.inbox} 条</span> : null}
-      </div>
-
-      {attachments.length > 0 ? (
-        <div className="pending-attachments">
-          {attachments.map((attachment, index) => (
-            <span className="pending-chip" key={keyFor(`pending-${attachment.name}`)}>
-              {attachment.previewUrl ? (
-                <img src={attachment.previewUrl} alt="" />
-              ) : (
-                <span aria-hidden="true">📄</span>
-              )}
-              <span title={attachment.name}>{attachment.name}</span>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                aria-label={`移除 ${attachment.name}`}
-                onClick={() => removeAttachment(index)}
-              >
-                ×
-              </button>
-            </span>
-          ))}
+    <footer className="border-t border-primary bg-surface px-4 py-3">
+      {dragging ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-surface/95 text-lg font-bold text-secondary"
+          aria-hidden="true"
+        >
+          <span className="rounded-md border-2 border-dashed border-secondary px-8 py-6">
+            Drop files here to attach (up to 5)
+          </span>
         </div>
       ) : null}
 
-      <div className="composer-box">
-        <input
-          ref={fileRef}
-          className="hidden-input"
-          type="file"
-          multiple
-          accept={ACCEPT}
-          tabIndex={-1}
-          onChange={(event) => {
-            if (event.target.files?.length) void addFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          className="btn btn-quiet"
-          aria-label="添加附件"
-          onClick={() => fileRef.current?.click()}
-        >
-          📎
-        </button>
-        <textarea
-          ref={textareaRef}
-          aria-label="输入消息"
-          placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
-          rows={1}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onCompositionStart={() => {
-            composing.current = true;
-          }}
-          onCompositionEnd={() => {
-            composing.current = false;
-          }}
-          onPaste={(event) => {
-            if (event.clipboardData.files.length > 0) {
-              event.preventDefault();
-              void addFiles(event.clipboardData.files);
-            }
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !composing.current &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!canSend}
-          onClick={() => void submit()}
-        >
-          {sending ? "发送中…" : "发送"}
-        </button>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {busy ? (
+            <CheckboxField label="Steer" checked={steer} onChange={setSteer} />
+          ) : (
+            <span className="label text-primary/70">
+              Enter to send · Shift+Enter for a new line
+            </span>
+          )}
+          <div className="flex items-center gap-3">
+            {(view?.inbox ?? 0) > 0 ? (
+              <span className="label text-primary/70">Queued: {view?.inbox}</span>
+            ) : null}
+            {busy ? (
+              <Button variant="danger" onClick={() => void stop()}>
+                Stop
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {attachments.length > 0 ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Attachments">
+            {attachments.map((attachment, index) => {
+              const key = keyFor(attachment.name);
+              return (
+                <li
+                  key={key}
+                  className="flex items-center gap-2 rounded-sm border border-primary/20 px-2 py-1"
+                >
+                  {attachment.previewUrl ? (
+                    <img
+                      src={attachment.previewUrl}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded-sm border border-primary/20 object-cover"
+                    />
+                  ) : (
+                    <span className="label text-secondary">File</span>
+                  )}
+                  <span className="max-w-40 truncate text-xs" title={attachment.name}>
+                    {attachment.name}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-quiet min-h-6 px-1"
+                    aria-label={`Remove ${attachment.name}`}
+                    onClick={() => removeAttachment(index)}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        <div className="flex items-end gap-2 rounded-md border border-primary bg-surface p-2 focus-within:border-secondary">
+          <input
+            ref={fileRef}
+            className="absolute h-px w-px opacity-0"
+            type="file"
+            multiple
+            accept={ACCEPT}
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              if (event.target.files?.length) void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <Button
+            variant="quiet"
+            aria-label="Add attachment"
+            onClick={() => fileRef.current?.click()}
+          >
+            Attach
+          </Button>
+          <textarea
+            ref={textareaRef}
+            aria-label="Message"
+            placeholder="Write a message... (Enter to send, Shift+Enter for a new line)"
+            rows={1}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onCompositionStart={() => {
+              composing.current = true;
+            }}
+            onCompositionEnd={() => {
+              composing.current = false;
+            }}
+            onPaste={(event) => {
+              if (event.clipboardData.files.length > 0) {
+                event.preventDefault();
+                void addFiles(event.clipboardData.files);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !composing.current &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            className="max-h-35 min-h-11 flex-1 resize-none border-0 bg-transparent leading-6 outline-none"
+          />
+          <Button variant="primary" disabled={!canSend} onClick={() => void submit()}>
+            {sending ? "Sending..." : "Send"}
+          </Button>
+        </div>
       </div>
     </footer>
   );

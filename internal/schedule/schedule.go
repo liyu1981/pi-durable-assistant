@@ -20,15 +20,15 @@ func Normalize(input map[string]any, now int64) (Schedule, error) {
 	text, _ := input["text"].(string)
 	text = strings.TrimSpace(text)
 	if text == "" || len([]rune(text)) > 1000 {
-		return Schedule{}, fmt.Errorf("任务内容必须是 1～1000 字")
+		return Schedule{}, fmt.Errorf("task text must be 1-1000 characters")
 	}
 	delay, err := number(input["minutesFromNow"])
 	if err != nil || delay < 0.25 || delay > 525600 {
-		return Schedule{}, fmt.Errorf("首次执行时间必须在 0.25～525600 分钟内")
+		return Schedule{}, fmt.Errorf("first run must be 0.25-525600 minutes away")
 	}
 	repeat, err := number(input["everyMinutes"])
 	if err != nil || repeat < 0 || (repeat > 0 && (repeat < 1 || repeat > 525600)) {
-		return Schedule{}, fmt.Errorf("重复间隔须为 0 或 1～525600 分钟")
+		return Schedule{}, fmt.Errorf("repeat interval must be 0 or 1-525600 minutes")
 	}
 	return Schedule{Text: text, At: now + int64(math.Round(delay*60000)), EveryMinutes: repeat}, nil
 }
@@ -79,16 +79,16 @@ func NormalizeRequestId(value any) (*string, error) {
 	}
 	s, ok := value.(string)
 	if !ok {
-		return nil, fmt.Errorf("requestId 必须是不超过 100 字的字符串")
+		return nil, fmt.Errorf("requestId must be a string of at most 100 characters")
 	}
 	if s == "" {
 		return nil, nil
 	}
 	if len([]rune(s)) > 100 {
-		return nil, fmt.Errorf("requestId 必须是不超过 100 字的字符串")
+		return nil, fmt.Errorf("requestId must be a string of at most 100 characters")
 	}
 	if s == "__proto__" || s == "prototype" || s == "constructor" {
-		return nil, fmt.Errorf("requestId 使用了保留名称")
+		return nil, fmt.Errorf("requestId uses a reserved name")
 	}
 	return &s, nil
 }

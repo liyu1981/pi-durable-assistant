@@ -213,7 +213,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "不支持流式响应")
+		writeError(w, http.StatusInternalServerError, "streaming is not supported")
 		viewWatch.Stop()
 		return
 	}
@@ -342,7 +342,7 @@ func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 	conversation, err := s.Runtime.Harness.CreateConversation(r.Context(), harness.ConversationCreateOptions{
 		Ownership: durable.ConversationOwnership{Kind: durable.ConversationOwnerless},
 		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.ModelRef)},
-		Init:      registerConversation("新对话", docs.IndexItem{}),
+		Init:      registerConversation("New conversation", docs.IndexItem{}),
 	})
 	if err != nil {
 		handleError(w, err)
@@ -372,11 +372,11 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if text == "" && len(files) == 0 {
-		writeError(w, http.StatusBadRequest, "消息不能为空")
+		writeError(w, http.StatusBadRequest, "message cannot be empty")
 		return
 	}
 	if len([]rune(text)) > 8000 {
-		writeError(w, http.StatusRequestEntityTooLarge, "消息太长")
+		writeError(w, http.StatusRequestEntityTooLarge, "message too long")
 		return
 	}
 	whenBusy := durable.WhenBusyFollowUp
@@ -397,7 +397,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	title := text
 	if title == "" && len(files) > 0 {
-		title = "[附件] " + files[0].Name
+		title = "[attachment] " + files[0].Name
 	}
 	_, _ = s.Runtime.Root.Commit(r.Context(), func(tx durable.Tx) (any, error) {
 		draft, err := durable.TxDoc(tx, docs.Index)
@@ -413,7 +413,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 			runes = runes[:20]
 		}
 		for _, item := range index.Items {
-			if item.ID == int64(conversation.Id()) && item.Title == "新对话" {
+			if item.ID == int64(conversation.Id()) && item.Title == "New conversation" {
 				item.Title = string(runes)
 			}
 		}
@@ -435,7 +435,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	}
 	entryIDValue, ok := body["entryId"].(float64)
 	if !ok || entryIDValue <= 0 {
-		writeError(w, http.StatusBadRequest, "缺少 entryId")
+		writeError(w, http.StatusBadRequest, "missing entryId")
 		return
 	}
 	index, _ := runtimeSnapshot[docs.IndexDoc](r.Context(), s, docs.Index)
@@ -453,7 +453,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	fork, err := conversation.Fork(r.Context(), entryID, harness.ConversationCreateOptions{
 		Ownership: durable.ConversationOwnership{Kind: durable.ConversationOwnerless},
 		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.ModelRef)},
-		Init:      registerConversation("分叉："+parentTitle, docs.IndexItem{ForkOf: &parentID, ForkAtEntry: &forkAt}),
+		Init:      registerConversation("Fork of "+parentTitle, docs.IndexItem{ForkOf: &parentID, ForkAtEntry: &forkAt}),
 	})
 	if err != nil {
 		handleError(w, err)
@@ -525,7 +525,7 @@ func (s *Server) shelf(action string) http.HandlerFunc {
 				}
 				return resultItem, nil
 			}
-			return nil, badRequest("会话不在列表里")
+			return nil, badRequest("conversation is not in the list")
 		})
 		if err != nil {
 			handleError(w, err)
@@ -559,12 +559,12 @@ func (s *Server) image(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if found == nil {
-		writeError(w, http.StatusNotFound, "图片不存在")
+		writeError(w, http.StatusNotFound, "image not found")
 		return
 	}
 	data, err := base64.StdEncoding.DecodeString(found.Data)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "图片不存在")
+		writeError(w, http.StatusNotFound, "image not found")
 		return
 	}
 	w.Header().Set("content-type", found.MimeType)
@@ -591,14 +591,14 @@ func (s *Server) exportMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# Pi Durable 会话 %d\n\n", conversation.Id())
+	fmt.Fprintf(&sb, "# Pi Durable conversation %d\n\n", conversation.Id())
 	for _, entry := range payload.Entries {
 		if entry.Kind != "user" && entry.Kind != "assistant" {
 			continue
 		}
-		label := "用户"
+		label := "User"
 		if entry.Kind == "assistant" {
-			label = "助手"
+			label = "Assistant"
 		}
 		fmt.Fprintf(&sb, "## %s\n\n%s\n\n", label, entry.Text)
 	}

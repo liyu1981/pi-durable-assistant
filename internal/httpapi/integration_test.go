@@ -140,12 +140,12 @@ func TestPersonalRoutes(t *testing.T) {
 	if status != http.StatusOK || len(body) != 3 {
 		t.Fatalf("personal status: %d %v", status, body)
 	}
-	status, body = client.do("POST", "/api/personal/memory", map[string]any{"text": "记住我", "source": "user", "requestId": "memo-1"})
+	status, body = client.do("POST", "/api/personal/memory", map[string]any{"text": "Remember me", "source": "user", "requestId": "memo-1"})
 	if status != http.StatusCreated || body["item"] == nil {
 		t.Fatalf("propose memory: %d %v", status, body)
 	}
 	first := body["item"].(map[string]any)
-	status, body = client.do("POST", "/api/personal/memory", map[string]any{"text": "记住我", "source": "user", "requestId": "memo-1"})
+	status, body = client.do("POST", "/api/personal/memory", map[string]any{"text": "Remember me", "source": "user", "requestId": "memo-1"})
 	if status != http.StatusCreated {
 		t.Fatalf("dedupe propose: %d %v", status, body)
 	}
@@ -178,14 +178,14 @@ func TestV3ManagementRoutes(t *testing.T) {
 	base := fmt.Sprintf("/api/conversations/%d", id)
 
 	status, body := client.do("POST", base+"/schedules", map[string]any{
-		"text": "每小时汇报", "minutesFromNow": 1, "everyMinutes": 60, "requestId": "schedule-1",
+		"text": "Hourly report", "minutesFromNow": 1, "everyMinutes": 60, "requestId": "schedule-1",
 	})
 	if status != http.StatusCreated || body["item"] == nil {
 		t.Fatalf("create schedule: %d %v", status, body)
 	}
 	first := body["item"].(map[string]any)
 	status, body = client.do("POST", base+"/schedules", map[string]any{
-		"text": "每小时汇报", "minutesFromNow": 1, "everyMinutes": 60, "requestId": "schedule-1",
+		"text": "Hourly report", "minutesFromNow": 1, "everyMinutes": 60, "requestId": "schedule-1",
 	})
 	if status != http.StatusCreated || body["item"].(map[string]any)["id"] != first["id"] {
 		t.Fatalf("schedule dedupe: %d %v", status, body)
@@ -213,12 +213,12 @@ func TestV3ManagementRoutes(t *testing.T) {
 		t.Fatalf("unknown action must 404: %d", status)
 	}
 
-	status, body = client.do("POST", base+"/background", map[string]any{"text": "后台任务", "requestId": "bg-1"})
+	status, body = client.do("POST", base+"/background", map[string]any{"text": "background task", "requestId": "bg-1"})
 	if status != http.StatusCreated || body["item"] == nil {
 		t.Fatalf("create background: %d %v", status, body)
 	}
 	backgroundID := body["item"].(map[string]any)["id"].(string)
-	status, body = client.do("POST", base+"/background", map[string]any{"text": "后台任务", "requestId": "bg-1"})
+	status, body = client.do("POST", base+"/background", map[string]any{"text": "background task", "requestId": "bg-1"})
 	if status != http.StatusCreated || body["item"].(map[string]any)["id"] != backgroundID {
 		t.Fatalf("background dedupe: %d %v", status, body)
 	}

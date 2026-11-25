@@ -25,24 +25,24 @@ export function formatListTime(value: string | number | null | undefined): strin
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startThat = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((startToday - startThat) / 86_400_000);
-  if (days === 0) return `今天 ${hm}`;
-  if (days === 1) return `昨天 ${hm}`;
+  if (days === 0) return `Today ${hm}`;
+  if (days === 1) return `Yesterday ${hm}`;
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 export function formatDuration(ms: number): string {
-  if (ms <= 0) return "0 秒";
+  if (ms <= 0) return "0s";
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
-  return minutes > 0 ? `${minutes} 分 ${seconds % 60} 秒` : `${seconds} 秒`;
+  return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }
 
 export function formatToolArgs(args: unknown): string {
-  if (args === null || args === undefined) return "无参数";
+  if (args === null || args === undefined) return "No arguments";
   if (typeof args === "string") return args;
   if (typeof args !== "object") return String(args);
   const entries = Object.entries(args as Record<string, unknown>);
-  if (entries.length === 0) return "无参数";
+  if (entries.length === 0) return "No arguments";
   return entries
     .map(
       ([key, value]) =>
@@ -78,7 +78,7 @@ export interface LiveInfo {
   runningTools: LiveToolSlot[];
 }
 
-/** Interpret the loosely-shaped `pi.live` document from the SSE view. */
+/** Interpret the loosely shaped `pi.live` document from the SSE view. */
 export function extractLiveInfo(live: LiveState | null | undefined): LiveInfo {
   if (!live) return { text: "", thinking: "", runningTools: [] };
   let text = "";
@@ -97,7 +97,7 @@ export function extractLiveInfo(live: LiveState | null | undefined): LiveInfo {
       else if (part.type === "thinking" && part.thinking) thinking += part.thinking;
       else if (part.type === "toolCall") {
         runningTools.push({
-          name: part.name || "工具调用",
+          name: part.name || "Tool call",
           args: part.arguments,
           status: "running",
         });

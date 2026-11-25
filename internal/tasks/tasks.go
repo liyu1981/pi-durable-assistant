@@ -46,7 +46,7 @@ func write(draft *delta.Object, value any) error {
 	}
 	object, ok := jsonValue.(*delta.JsonObject)
 	if !ok {
-		return fmt.Errorf("文档值必须是 JSON 对象")
+		return fmt.Errorf("document value must be a JSON object")
 	}
 	for _, key := range object.Keys() {
 		entry, _ := object.Get(key)
@@ -108,7 +108,7 @@ var ReminderTask = durable.DefineTask(durable.TaskDefinition[ReminderInput, Phas
 			}
 			requestID := fmt.Sprintf("reminder:%d", task.Id)
 			_, err = conversation.Submit(ctx, durable.SubmissionDraft{
-				Type: durable.SubmissionTypeInput, Content: ai.UserText("[定时提醒] " + task.Input.Text),
+				Type: durable.SubmissionTypeInput, Content: ai.UserText("[Reminder] " + task.Input.Text),
 				RequestId: &requestID, WhenBusy: durable.WhenBusyFollowUp,
 			})
 			if err != nil {
@@ -134,7 +134,7 @@ var ReminderTask = durable.DefineTask(durable.TaskDefinition[ReminderInput, Phas
 				return terminal(), nil
 			})
 			if err == nil {
-				Notify(NotifyEvent{ID: requestID, Type: "reminder", Text: "定时提醒：" + task.Input.Text})
+				Notify(NotifyEvent{ID: requestID, Type: "reminder", Text: "Reminder:" + task.Input.Text})
 			}
 			return err
 		},
@@ -249,10 +249,10 @@ func init() {
 				}
 				requestID := fmt.Sprintf("schedule:%s:%d", task.Input.ScheduleID, task.Input.At)
 				_, err = conversation.Submit(ctx, durable.SubmissionDraft{
-					Type: durable.SubmissionTypeInput, Content: ai.UserText("[计划任务] " + task.Input.Text),
+					Type: durable.SubmissionTypeInput, Content: ai.UserText("[Scheduled task] " + task.Input.Text),
 					RequestId: &requestID, WhenBusy: durable.WhenBusyFollowUp,
 				})
-				Notify(NotifyEvent{ID: requestID, Type: "schedule", Text: "计划任务已触发：" + task.Input.Text})
+				Notify(NotifyEvent{ID: requestID, Type: "schedule", Text: "Scheduled task triggered:" + task.Input.Text})
 				_ = everyMinutes
 				return err
 			},
@@ -330,7 +330,7 @@ var BackgroundTask = durable.DefineTask(durable.TaskDefinition[BackgroundInput, 
 			}
 			result := lastAssistantText(view.Entries)
 			if result == "" {
-				result = "后台子 Agent 没有返回文字结果"
+				result = "background subagent returned no text result"
 			}
 			err = runtime.Commit(ctx, func(tx durable.Tx, current durable.RunningTask[BackgroundInput, Phase, noResult]) (*durable.NextTaskState[Phase, noResult], error) {
 				draft, err := durable.TxDoc(tx, docs.Backgrounds, current.ConversationId)
@@ -361,10 +361,10 @@ var BackgroundTask = durable.DefineTask(durable.TaskDefinition[BackgroundInput, 
 			}
 			resultRequestID := "background-result:" + task.Input.JobID
 			_, err = parent.Submit(ctx, durable.SubmissionDraft{
-				Type: durable.SubmissionTypeInput, Content: ai.UserText("[后台任务结果] " + result),
+				Type: durable.SubmissionTypeInput, Content: ai.UserText("[Background task result] " + result),
 				RequestId: &resultRequestID, WhenBusy: durable.WhenBusyFollowUp,
 			})
-			Notify(NotifyEvent{ID: resultRequestID, Type: "background", Text: "后台任务完成：" + task.Input.Text})
+			Notify(NotifyEvent{ID: resultRequestID, Type: "background", Text: "background task completed:" + task.Input.Text})
 			return err
 		},
 	},
@@ -435,7 +435,7 @@ func Notify(event NotifyEvent) {
 	request.Header.Set("x-pi-event-id", event.ID)
 	response, err := (&http.Client{Timeout: 8 * time.Second}).Do(request)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Webhook 推送失败；细节已隐藏，避免泄露 URL 中的密钥")
+		fmt.Fprintln(os.Stderr, "Webhook webhook delivery failed; details hidden to avoid leaking URL secrets")
 		return
 	}
 	response.Body.Close()

@@ -92,20 +92,20 @@ func FetchPublicPage(ctx context.Context, rawURL string, abort <-chan struct{}) 
 	for hop := 0; hop < maxHops; hop++ {
 		u, parseErr := url.Parse(rawURL)
 		if parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") {
-			return 0, "", errors.New("只支持 http 或 https 地址")
+			return 0, "", errors.New("only http or https URLs are supported")
 		}
 		host := u.Hostname()
 		if host == "" {
-			return 0, "", errors.New("地址缺少主机名")
+			return 0, "", errors.New("URL has no host")
 		}
 		addresses, lookupErr := net.DefaultResolver.LookupIPAddr(ctx, host)
 		if lookupErr != nil || len(addresses) == 0 {
-			return 0, "", errors.New("无法解析主机")
+			return 0, "", errors.New("could not resolve host")
 		}
 		pinned := addresses[0].IP
 		for _, candidate := range addresses {
 			if !public(candidate.IP) {
-				return 0, "", errors.New("不允许访问内网地址")
+				return 0, "", errors.New("private addresses are not allowed")
 			}
 		}
 		if pinned.To4() == nil && len(addresses) > 1 {
@@ -171,5 +171,5 @@ func FetchPublicPage(ctx context.Context, rawURL string, abort <-chan struct{}) 
 		}
 		return resp.StatusCode, text, nil
 	}
-	return 0, "", errors.New("重定向次数过多")
+	return 0, "", errors.New("too many redirects")
 }

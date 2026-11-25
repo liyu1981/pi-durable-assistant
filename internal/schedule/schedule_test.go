@@ -3,11 +3,11 @@ package schedule
 import "testing"
 
 func TestNormalize(t *testing.T) {
-	got, err := Normalize(map[string]any{"text": " 提醒 ", "minutesFromNow": 1, "everyMinutes": 5}, 1000)
+	got, err := Normalize(map[string]any{"text": " reminder ", "minutesFromNow": 1, "everyMinutes": 5}, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Text != "提醒" || got.At != 61000 || got.EveryMinutes != 5 {
+	if got.Text != "reminder" || got.At != 61000 || got.EveryMinutes != 5 {
 		t.Fatalf("unexpected schedule: %+v", got)
 	}
 	for _, input := range []map[string]any{

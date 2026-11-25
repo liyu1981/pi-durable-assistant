@@ -22,30 +22,35 @@ var webDist embed.FS
 func main() {
 	cfg := config.Load()
 	if cfg.Production && cfg.Password == "" {
-		fmt.Fprintln(os.Stderr, "生产环境必须设置 DEMO_PASSWORD")
+		fmt.Fprintln(os.Stderr, "DEMO_PASSWORD is required in production")
 		os.Exit(1)
 	}
 	rt, err := runtime.Open(context.Background(), cfg)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "启动失败：", cfg.Redact(err.Error()))
+		fmt.Fprintln(os.Stderr, "startup failed:", cfg.Redact(err.Error()))
 		os.Exit(1)
 	}
 	assets, err := fs.Sub(webDist, "web/dist")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "静态资源加载失败：", err)
+		fmt.Fprintln(os.Stderr, "failed to load static assets:", err)
 		os.Exit(1)
 	}
 	server, err := httpapi.NewServer(rt, assets)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "HTTP 初始化失败：", err)
+		fmt.Fprintln(os.Stderr, "HTTP initialization failed:", err)
 		os.Exit(1)
 	}
 	host := "127.0.0.1"
-	if cfg.Password != "" {
+	port := cfg.Port
+	if cfg.Dev {
+		// Development always binds all interfaces on the fixed demo port.
+		host = "0.0.0.0"
+		port = 3111
+	} else if cfg.Password != "" {
 		host = "0.0.0.0"
 	}
 	httpServer := &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", host, cfg.Port),
+		Addr:              fmt.Sprintf("%s:%d", host, port),
 		Handler:           server,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -58,9 +63,9 @@ func main() {
 		defer cancel()
 		httpServer.Shutdown(ctx)
 	}()
-	fmt.Printf("pi-durable-assistant 已启动：%s，模型 %s，PID %d\n", httpServer.Addr, rt.ModelLabel, os.Getpid())
+	fmt.Printf("pi-durable-assistant started: %s, model %s, PID %d\n", httpServer.Addr, rt.ModelLabel, os.Getpid())
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintln(os.Stderr, "服务退出：", err)
+		fmt.Fprintln(os.Stderr, "server exited:", err)
 		os.Exit(1)
 	}
 }

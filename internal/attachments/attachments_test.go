@@ -13,7 +13,7 @@ func input(name, mime string, data []byte) map[string]any {
 
 func TestParseTextAndImage(t *testing.T) {
 	png := append([]byte{0x89, 'P', 'N', 'G', 0, 0, 0, 0}, []byte("rest")...)
-	files, err := Parse([]any{input("notes.md", "text/markdown", []byte("hello\n世界")), input("pic.png", "image/png", png)})
+	files, err := Parse([]any{input("notes.md", "text/markdown", []byte("hello\nworld")), input("pic.png", "image/png", png)})
 	if err != nil {
 		t.Fatal(err)
 	}

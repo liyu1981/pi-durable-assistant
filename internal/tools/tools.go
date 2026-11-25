@@ -42,7 +42,7 @@ func write(draft *delta.Object, value any) error {
 	}
 	object, ok := jsonValue.(*delta.JsonObject)
 	if !ok {
-		return fmt.Errorf("文档值必须是 JSON 对象")
+		return fmt.Errorf("document value must be a JSON object")
 	}
 	for _, key := range object.Keys() {
 		entry, _ := object.Get(key)
@@ -87,7 +87,7 @@ func applyOnce(ctx context.Context, api durable.ToolExecutionApi, change func(*d
 
 var Todo = harness.DefineTool(durable.ToolRegistration{
 	ToolSchema: ai.ToolSchema{
-		Name: "todo", Description: "维护待办：add 新增一条，done 把匹配的一条标记完成",
+		Name: "todo", Description: "Manage todos: add creates one, done marks a matching one complete",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"action": map[string]any{"type": "string", "enum": []any{"add", "done"}}, "text": map[string]any{"type": "string"},
 		}, "required": []any{"action", "text"}},
@@ -100,21 +100,21 @@ var Todo = harness.DefineTool(durable.ToolRegistration{
 		result, err := applyOnce(ctx, api, func(notes *docs.NotesDoc) string {
 			if action == "add" {
 				notes.Todos = append(notes.Todos, docs.Todo{Text: text})
-				return "已添加：" + text
+				return "Added:" + text
 			}
 			for i := range notes.Todos {
 				if !notes.Todos[i].Done && notes.Todos[i].Text == text {
 					notes.Todos[i].Done = true
-					return "已完成：" + notes.Todos[i].Text
+					return "done:" + notes.Todos[i].Text
 				}
 			}
 			for i := range notes.Todos {
 				if !notes.Todos[i].Done && strings.Contains(notes.Todos[i].Text, text) {
 					notes.Todos[i].Done = true
-					return "已完成：" + notes.Todos[i].Text
+					return "done:" + notes.Todos[i].Text
 				}
 			}
-			return "没找到待办：" + text
+			return "todo not found:" + text
 		})
 		if err != nil {
 			return durable.ToolExecutionResult{}, err
@@ -125,7 +125,7 @@ var Todo = harness.DefineTool(durable.ToolRegistration{
 
 var Memo = harness.DefineTool(durable.ToolRegistration{
 	ToolSchema: ai.ToolSchema{
-		Name: "memo", Description: "记在当前会话的备忘；跨会话事实请用 propose_memory",
+		Name: "memo", Description: "Store a note for this conversation; use propose_memory for cross-session facts",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"text": map[string]any{"type": "string"},
 		}, "required": []any{"text"}},
@@ -135,7 +135,7 @@ var Memo = harness.DefineTool(durable.ToolRegistration{
 		text, _ := argsMap(args)["text"].(string)
 		result, err := applyOnce(ctx, api, func(notes *docs.NotesDoc) string {
 			notes.Memos = append(notes.Memos, text)
-			return "已记下：" + text
+			return "Noted:" + text
 		})
 		if err != nil {
 			return durable.ToolExecutionResult{}, err
@@ -145,7 +145,7 @@ var Memo = harness.DefineTool(durable.ToolRegistration{
 })
 
 var CurrentTime = harness.DefineTool(durable.ToolRegistration{
-	ToolSchema: ai.ToolSchema{Name: "current_time", Description: "获取当前北京时间", Parameters: map[string]any{"type": "object"}},
+	ToolSchema: ai.ToolSchema{Name: "current_time", Description: "Get the current Beijing time", Parameters: map[string]any{"type": "object"}},
 	Replay:     durable.ReplaySafe,
 	Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
 		location, err := time.LoadLocation("Asia/Shanghai")
@@ -158,7 +158,7 @@ var CurrentTime = harness.DefineTool(durable.ToolRegistration{
 
 var FetchPage = harness.DefineTool(durable.ToolRegistration{
 	ToolSchema: ai.ToolSchema{
-		Name: "fetch_page", Description: "抓取一个公开网页的正文文字（最多 6000 字）",
+		Name: "fetch_page", Description: "Fetch the readable text of a public web page (up to 6000 characters)",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"url": map[string]any{"type": "string"},
 		}, "required": []any{"url"}},
@@ -168,7 +168,7 @@ var FetchPage = harness.DefineTool(durable.ToolRegistration{
 		rawURL, _ := argsMap(args)["url"].(string)
 		status, body, err := netutil.FetchPublicPage(ctx, rawURL, ctx.Done())
 		if err != nil {
-			return textResult("抓取失败：" + err.Error()), nil
+			return textResult("fetch failed:" + err.Error()), nil
 		}
 		text := htmlToText(body)
 		if len([]rune(text)) > 6000 {
@@ -180,7 +180,7 @@ var FetchPage = harness.DefineTool(durable.ToolRegistration{
 
 var WaitSeconds = harness.DefineTool(durable.ToolRegistration{
 	ToolSchema: ai.ToolSchema{
-		Name: "wait_seconds", Description: "等待一段时间再继续（1 到 120 秒）",
+		Name: "wait_seconds", Description: "Wait before continuing (1 to 120 seconds)",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"seconds": map[string]any{"type": "number"}, "reason": map[string]any{"type": "string"},
 		}, "required": []any{"seconds"}},
@@ -204,7 +204,7 @@ var WaitSeconds = harness.DefineTool(durable.ToolRegistration{
 		}
 		deadline, ok := deadlineValue.(float64)
 		if !ok {
-			return textResult("已等待完成。"), nil
+			return textResult("Wait complete."), nil
 		}
 		for {
 			remaining := int64(deadline) - time.Now().UnixMilli()
@@ -217,17 +217,17 @@ var WaitSeconds = harness.DefineTool(durable.ToolRegistration{
 			}
 			select {
 			case <-ctx.Done():
-				return textResult("等待已取消。"), nil
+				return textResult("Wait cancelled."), nil
 			case <-time.After(wait):
 			}
 		}
-		return textResult(fmt.Sprintf("已等待 %d 秒", seconds)), nil
+		return textResult(fmt.Sprintf("waited %d seconds", seconds)), nil
 	},
 })
 
 var RemindMe = harness.DefineTool(durable.ToolRegistration{
 	ToolSchema: ai.ToolSchema{
-		Name: "remind_me", Description: "设一个定时提醒：到点后你会收到一条以 [定时提醒] 开头的消息",
+		Name: "remind_me", Description: "Set a reminder: when due you receive a message starting with [Reminder]",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"minutes": map[string]any{"type": "number"}, "text": map[string]any{"type": "string"},
 		}, "required": []any{"minutes", "text"}},
@@ -269,7 +269,7 @@ var RemindMe = harness.DefineTool(durable.ToolRegistration{
 			doc.Items = append(doc.Items, docs.ReminderItem{ID: int64(id), Text: text, At: at, Status: "scheduled"})
 			location, _ := time.LoadLocation("Asia/Shanghai")
 			when := time.UnixMilli(at).In(location).Format("15:04:05")
-			result = fmt.Sprintf("已设好提醒：%s（北京时间）提醒“%s”", when, text)
+			result = fmt.Sprintf(`Reminder set: %s (Beijing time) for "%s"`, when, text)
 			doc.Applied[requestID] = result
 			return result, write(draft, doc)
 		})
@@ -289,7 +289,7 @@ func init() {
 		Tools: []*durable.ToolRegistration{
 			harness.DefineTool(durable.ToolRegistration{
 				ToolSchema: ai.ToolSchema{
-					Name: "delegate", Description: "派一个子 Agent 独立完成一件事，等它做完拿回结果",
+					Name: "delegate", Description: "Delegate a self-contained task to a subagent and wait for its result",
 					Parameters: map[string]any{"type": "object", "properties": map[string]any{
 						"task": map[string]any{"type": "string"},
 					}, "required": []any{"task"}},
@@ -313,7 +313,7 @@ func init() {
 						childID = child.Id
 						if err := harness.Configure(tx, childID, harness.AgentChange{
 							Extensions:   harness.SetTo(harness.ExtensionChange{Edit: &harness.ExtensionEdit{Remove: []*durable.Extension{Delegate}}}),
-							Instructions: harness.SetTo("你是主 Agent 派出的子 Agent，只负责完成交给你的这一件事，完成后用简短中文汇报结果。"),
+							Instructions: harness.SetTo("You are a subagent created by the main agent. Complete only this one task and report the result briefly in English."),
 						}); err != nil {
 							return nil, err
 						}
@@ -388,7 +388,7 @@ func init() {
 						}
 					}
 					if answer == "" {
-						answer = "子 Agent 完成了，但没有文字结果"
+						answer = "Subagent finished without a text result"
 					}
 					return textResult(answer), nil
 				},
@@ -407,16 +407,16 @@ var Assistant = harness.DefineExtension(durable.Extension{
 	Sections: []*durable.PromptSection{
 		harness.Section("preamble", func(ctx context.Context, input durable.PromptInput) (*string, error) {
 			text := strings.Join([]string{
-				"你是“小墨的 Durable 助手”，用简体中文简洁回答。",
-				"遇到多步骤任务，先用 todo 列出步骤，做完一步标记一步。",
-				"当场等一会儿再继续用 wait_seconds；几分钟以后才要做的事用 remind_me 设提醒。",
-				"收到以 [定时提醒] 开头的消息时，那是你之前设的提醒到点了，用一两句话提醒用户这件事。",
-				"能独立完成、步骤较多的调研可以用 delegate 派给子 Agent；需要后台独立运行用后台任务。",
-				"有周期性或延迟执行的需求用 schedule_task（任务中心里也可以创建）。",
-				"当前会话的备忘用 memo。跨会话要记住的稳定事实用 propose_memory，等用户批准。",
-				"已批准的技能先用 read_skill 读全文再执行；新流程用 propose_skill 提交。",
-				"用户自己的笔记用 search_knowledge 和 read_knowledge，回答要带路径和行号。",
-				"查公开网页用 fetch_page。",
+				"You are a concise durable assistant. Answer briefly in English.",
+				"For multi-step tasks, list steps with todo and mark each one done.",
+				"Use wait_seconds for short waits; use remind_me for anything minutes away.",
+				"A message starting with [Reminder] is a reminder you set earlier; remind the user in one or two sentences.",
+				"Use delegate for self-contained research; use a background task for independent long-running work.",
+				"Use scheduled tasks for recurring or delayed work (also available in the task center).",
+				"Use memo for notes in this conversation; use propose_memory for durable cross-session facts and wait for approval.",
+				"Read approved skills with read_skill before following them; propose new ones with propose_skill.",
+				"Use search_knowledge and read_knowledge for the user's notes, and cite paths with line numbers.",
+				"Use fetch_page for public web pages.",
 			}, "\n")
 			return &text, nil
 		}, harness.SectionOptions{Tag: boolPtr(false)}),
@@ -425,7 +425,7 @@ var Assistant = harness.DefineExtension(durable.Extension{
 			if err != nil || notes == nil || (len(notes.Todos) == 0 && len(notes.Memos) == 0) {
 				return nil, nil
 			}
-			lines := []string{"当前记事本："}
+			lines := []string{"Current notebook:"}
 			for _, todo := range notes.Todos {
 				mark := "[ ]"
 				if todo.Done {

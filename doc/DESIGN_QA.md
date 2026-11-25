@@ -1,49 +1,42 @@
-# `minimal` design QA checklist — completed audit
+# `minimal` design audit
 
-Source: `liyu1981/awesome-design-skills/skills/minimal` (DESIGN.md + SKILL.md). Tokens are implemented in `web/src/styles/tokens.css` as Tailwind v4 `@theme` variables and self-hosted `@fontsource/*` imports.
+Source: `liyu1981/awesome-design-skills/skills/minimal` (DESIGN.md + SKILL.md). The UI was rebuilt from scratch on these tokens; no legacy visual language remains. Tokens live only in `web/src/styles/tokens.css` (Tailwind v4 `@theme` + self-hosted `@fontsource/*`).
 
-Audit date: 2026-11-25. Method: source inspection of `web/src/**` plus `npm run typecheck/check/build`. Where an item requires a human at a browser, it is marked explicitly as **manual follow-up** rather than claimed as verified.
+Audit date: 2026-11-25. Method: source inspection of `web/src/**` plus `pnpm check`. Items needing a human at a browser are marked as manual follow-up, not claimed as verified.
 
-## Tokens (must)
+## Tokens
 
-- [x] Colors: primary `#0C0C09`, secondary `#312C85`, success `#16A34A`, warning `#D97706`, danger `#DC2626`, surface `#F4F4F1`, text `#0C0C09`, neutral `#F4F4F1` — verified in `tokens.css:13-20`.
-- [x] Typography: Inter display / h1 3rem, Open Sans body / 1rem, Inconsolata label / 0.75rem uppercase with tracking — `tokens.css:22-29`, `.label` at `tokens.css:92`.
-- [x] Radius: 4px small, 8px medium only — `tokens.css:31-32`.
-- [x] Spacing: 4/8/12/16/24/32 — `tokens.css:34-39`.
-- [x] Status colors reserved for status; no gradients/heavy shadows in styles — reviewed `web/src/styles/tokens.css` and component classes.
+- [x] Exact palette in `tokens.css`: `#0C0C09`, `#312C85`, `#16A34A`, `#D97706`, `#DC2626`, `#F4F4F1`, `#0C0C09`, `#F4F4F1`.
+- [x] Typography: Inter display (`h1` 3rem), Open Sans body (1rem), Inconsolata labels (0.75rem uppercase/tracked), self-hosted.
+- [x] Spacing: only 4/8/12/16/24/32. Radii: 4px/8px only.
+- [x] No raw hex values outside `tokens.css`; no gradients, shadows, or text shadows (`grep` confirmed none).
+- [x] Flat surface panels with thin borders and a restrained indigo accent; no legacy dark/light app chrome, emoji decoration, or pill-heavy styling.
 
-## Component states (must)
+## Components and interaction
 
-- [x] Visible focus ring for every interactive element: `:where(button, a, input, textarea, summary, [tabindex]):focus-visible` with 2px secondary outline and offset — `tokens.css:87-91`.
-- [x] Hover/active/disabled states defined for buttons (`:hover:not(:disabled)`, `:active:not(:disabled)`, `button:disabled`) — `tokens.css:80-85,125-151`.
-- [x] Loading/empty/error states present: `aria-live` feedback in `TaskCenter.tsx`, `PersonalPanel.tsx`, `ChatThread.tsx`, `ToastContainer.tsx`; disabled while busy in `KnowledgePanel.tsx`, `TaskCenter.tsx`, `Composer.tsx`.
-- [x] Keyboard interactions: Enter to send (IME-aware) in `Composer.tsx:458`; Escape to close drawer in `Drawer.tsx`; Tab focus trap and focus restoration in `Drawer.tsx` (added during this audit).
-- [x] Long labels / overflow: conversation rows truncate via CSS; toasts and panels scroll; empty conversation state has explicit "新建会话" action (`Sidebar.tsx`).
-- [ ] **Manual follow-up:** visually exercise hover/active/loading/empty/overflow states in a browser at desktop and narrow widths.
+- [x] Shared primitives in `src/components/ui.tsx` (section headings, buttons, badges, empty states) keep the visual language consistent.
+- [x] Sidebar: active/archived tabs, new conversation, fork, archive/restore/remove with confirmation, archive counts, explicit empty states.
+- [x] Chat thread: user/assistant/tool entries, tool-call badges, live streaming text, usage and task badges, attachment chips, system notices for `[Reminder]`, `[Scheduled task]`, and `[Background task result]`.
+- [x] Composer: 5-file limit, PNG/JPEG/WebP/GIF and text files, base64, drag/drop, paste, image compression, size caps, steering, stop, IME-aware Enter-to-send.
+- [x] Status panel, task center drawer (schedules/background/reminders with pause/resume/cancel/stop and Markdown export), memory/skills panel, knowledge search/read, SSE reconnect, toasts.
+- [x] Hover/active/disabled/loading/error states defined through token-based utilities; no color-only status (each badge carries text).
 
-## Accessibility (WCAG 2.2 AA)
+## Accessibility
 
-- [x] Contrast: body text uses `#0C0C09` on `#F4F4F1` (high contrast); `#312C85` is used only for display text/focus/borders, not small body text — token audit.
-- [x] Accessible names/roles: `aria-label` on sidebar, nav, composer, attachment buttons, drawer backdrop/dialog; `role="tablist"/"tab"/"aria-selected"` on sidebar and drawer tabs; `role="status" aria-live="polite"` on toasts and status panels — `Sidebar.tsx`, `Drawer.tsx`, `Composer.tsx`, `ToastContainer.tsx`, `TaskCenter.tsx`, `PersonalPanel.tsx`.
-- [x] Focus order: drawer focuses its close button on open, traps Tab inside `role="dialog"`, restores the previously focused element on close — `Drawer.tsx`.
-- [x] No color-only status: tool errors show text plus `isError` styling; SSE reconnect shows a `role="status"` banner (`App.tsx:191`).
-- [ ] **Manual follow-up:** keyboard-only browser pass through sidebar → composer → task center → memory/skills → knowledge; verify focus visibility and focus return with a real browser. No GUI browser was available in this environment, so this is **not claimed as signed off**.
+- [x] Global 2px `--color-secondary` focus ring on all interactive elements; reduced-motion support.
+- [x] Keyboard: Enter sends, Shift+Enter newline, Escape closes the drawer, drawer traps Tab and restores focus on close.
+- [x] `aria-label`/`role` on sidebar, navigation, composer, attachments, dialog, tabs, toasts, live chat region; `aria-live` for feedback.
+- [x] Empty, loading and error messages present and written in concise, confident English.
+- [ ] **Manual follow-up:** interactive keyboard-only and contrast pass in a real browser. No GUI browser was available here, so this is not signed off.
 
-## Content and tone
+## Content
 
-- [x] Buttons use action labels in Chinese ("新建会话", "取消计划", "添加附件", "归档", "恢复", "删除") — reviewed component JSX.
-- [x] Errors/toasts are concise and actionable; no ambiguous standalone "确定"/"提交" labels found in the reviewed components.
+- [x] All UI text and comments in English. A repository-wide CJK scan (excluding `tmp/`, `node_modules`, `dist`) returned zero matches.
+- [x] Buttons use action labels ("New conversation", "Cancel schedule", "Add attachment", "Archive", "Restore", "Delete"), not ambiguous standalone confirmations.
 
-## Anti-patterns
+## Quality gate
 
-- [x] No gradients, heavy shadows, mixed radii, raw hex in components, hidden focus outlines, or color-only meaning found in `web/src/**`.
+- [x] `pnpm check` — Go tests/build, `tsc --noEmit`, Biome check, and Vite build all pass.
+- [x] End-to-end chat flow with the dev-time faux provider returns English todos, tool results, and the final `Demo task complete.` answer.
 
-## QA gate
-
-- [x] `cd web && npm run typecheck` — clean.
-- [x] `cd web && npm run check` — Biome clean after `npm run format`.
-- [x] `cd web && npm run build` — Vite 8 build emits hashed assets into `web/dist`.
-
-## Sign-off
-
-Code-level `minimal` compliance: **signed off** (2026-11-25). Interactive WCAG keyboard/visual pass: **not signed off** — requires a human with a browser; see the two manual follow-up boxes above.
+**Sign-off:** code-level `minimal` compliance is complete. Interactive browser keyboard/visual pass remains a manual follow-up.

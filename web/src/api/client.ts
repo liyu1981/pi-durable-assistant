@@ -20,7 +20,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, { ...init, headers });
   } catch (error) {
-    throw new ApiError(0, error instanceof Error ? error.message : "网络请求失败");
+    throw new ApiError(0, error instanceof Error ? error.message : "Network request failed");
   }
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
@@ -69,7 +69,7 @@ export interface ViewSubscription {
 /**
  * Subscribe to the SSE `view` stream for one conversation.
  * On failure the connection is closed and retried with exponential backoff
- * (1s … 30s); `close` cancels all pending work.
+ * (1s ... 30s); `close` cancels all pending work.
  */
 export function subscribeView(
   conversationId: number,
@@ -105,7 +105,7 @@ export function subscribeView(
         const payload = JSON.parse((event as MessageEvent<string>).data) as ViewPayload;
         onView(payload);
       } catch (error) {
-        console.error("无法解析 SSE view 数据", error);
+        console.error("Failed to parse SSE view payload", error);
       }
     });
   };

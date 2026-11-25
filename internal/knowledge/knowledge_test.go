@@ -9,14 +9,14 @@ import (
 
 func TestSearchAndRead(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "AI学习"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "AI Learning"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(root, "AI学习", "note.md")
-	if err := os.WriteFile(path, []byte("第一行\nPi Durable 很好用\n第三行\n"), 0o644); err != nil {
+	path := filepath.Join(root, "AI Learning", "note.md")
+	if err := os.WriteFile(path, []byte("First line\nPi Durable works well\nThird line\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	roots := AllowedRoots(root, []string{"AI学习"})
+	roots := AllowedRoots(root, []string{"AI Learning"})
 	hits, err := Search(roots, "Durable", false)
 	if err != nil || len(hits) != 1 || hits[0].Line != 2 {
 		t.Fatalf("unexpected hits: %+v %v", hits, err)

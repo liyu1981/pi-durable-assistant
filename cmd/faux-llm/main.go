@@ -80,7 +80,7 @@ func step(request chatRequest) choice {
 			replies++
 		}
 	}
-	steps := []string{"第一步：查资料", "第二步：等待 10 秒", "第三步：整理结论"}
+	steps := []string{"Step 1: Research", "Step 2: Wait 10 seconds", "Step 3: Summarize"}
 	switch replies {
 	case 0:
 		calls := []toolCall{}
@@ -90,7 +90,7 @@ func step(request chatRequest) choice {
 		return choice{Index: 0, Message: message{Role: "assistant", Content: textContent(""), ToolCalls: calls}, FinishReason: "tool_calls"}
 	case 1:
 		return choice{Index: 0, Message: message{Role: "assistant", Content: textContent(""), ToolCalls: []toolCall{
-			call("call_wait", "wait_seconds", map[string]any{"seconds": 10, "reason": "演示长任务"}),
+			call("call_wait", "wait_seconds", map[string]any{"seconds": 10, "reason": "demo long task"}),
 		}}, FinishReason: "tool_calls"}
 	case 2:
 		calls := []toolCall{}
@@ -99,7 +99,7 @@ func step(request chatRequest) choice {
 		}
 		return choice{Index: 0, Message: message{Role: "assistant", Content: textContent(""), ToolCalls: calls}, FinishReason: "tool_calls"}
 	default:
-		return choice{Index: 0, Message: message{Role: "assistant", Content: textContent("演示任务完成。")}, FinishReason: "stop"}
+		return choice{Index: 0, Message: message{Role: "assistant", Content: textContent("Demo task complete.")}, FinishReason: "stop"}
 	}
 }
 
@@ -147,7 +147,7 @@ func main() {
 		}
 	})
 	addr := "127.0.0.1:" + port
-	fmt.Println("faux-llm 开发服务器监听", addr, "（仅开发使用）")
+	fmt.Println("faux-llm dev server listening on", addr, "(dev only)")
 	http.ListenAndServe(addr, mux)
 }
 

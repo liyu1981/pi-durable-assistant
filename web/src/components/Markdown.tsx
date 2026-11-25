@@ -1,44 +1,16 @@
 import type { ReactNode } from "react";
-import { makeKeyFactory } from "../lib/format";
 
 const INLINE = /(`[^`\n]+`)|(\*\*[^*]+\*\*)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g;
-const URL = /(https?:\/\/[^\s<)]+)/g;
+const URL_PATTERN = /(https?:\/\/[^\s<)]+)/g;
 
-function inline(text: string): ReactNode[] {
+function renderUrls(text: string, base: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;
-  for (const match of text.matchAll(INLINE)) {
-    const at = match.index ?? 0;
-    if (at > last) nodes.push(...plain(text.slice(last, at)));
-    const token = match[0];
-    if (token.startsWith("`")) {
-      nodes.push(<code key={at}>{token.slice(1, -1)}</code>);
-    } else if (token.startsWith("**")) {
-      nodes.push(<strong key={at}>{token.slice(2, -2)}</strong>);
-    } else {
-      const link = /^\[([^\]]+)\]\((https?:\/\/\S+)\)$/.exec(token);
-      if (link) {
-        nodes.push(
-          <a key={at} href={link[2]} target="_blank" rel="noopener noreferrer">
-            {link[1]}
-          </a>,
-        );
-      }
-    }
-    last = at + token.length;
-  }
-  if (last < text.length) nodes.push(...plain(text.slice(last)));
-  return nodes;
-}
-
-function plain(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let last = 0;
-  for (const match of text.matchAll(URL)) {
+  for (const match of text.matchAll(URL_PATTERN)) {
     const at = match.index ?? 0;
     if (at > last) nodes.push(text.slice(last, at));
     nodes.push(
-      <a key={`url-${at}`} href={match[0]} target="_blank" rel="noopener noreferrer">
+      <a key={`${base}-url-${at}`} href={match[0]} target="_blank" rel="noopener noreferrer">
         {match[0]}
       </a>,
     );
@@ -48,34 +20,72 @@ function plain(text: string): ReactNode[] {
   return nodes;
 }
 
-/** Deliberately small, HTML-free Markdown renderer for model output. */
+function renderInline(text: string, base: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(INLINE)) {
+    const at = match.index ?? 0;
+    if (at > last) nodes.push(...renderUrls(text.slice(last, at), `${base}-plain-${at}`));
+    const token = match[0];
+    if (token.startsWith("`")) {
+      nodes.push(<code key={`${base}-code-${at}`}>{token.slice(1, -1)}</code>);
+    } else if (token.startsWith("**")) {
+      nodes.push(<strong key={`${base}-bold-${at}`}>{token.slice(2, -2)}</strong>);
+    } else {
+      const link = /^\[([^\]]+)\]\((https?:\/\/\S+)\)$/.exec(token);
+      if (link) {
+        nodes.push(
+          <a key={`${base}-link-${at}`} href={link[2]} target="_blank" rel="noopener noreferrer">
+            {link[1]}
+          </a>,
+        );
+      }
+    }
+    last = at + token.length;
+  }
+  if (last < text.length) nodes.push(...renderUrls(text.slice(last), `${base}-tail`));
+  return nodes;
+}
+
+function createKeyFactory(): (base: string) => string {
+  const counts = new Map<string, number>();
+  return (base: string) => {
+    const count = (counts.get(base) ?? 0) + 1;
+    counts.set(base, count);
+    return count === 1 ? base : `${base}-${count}`;
+  };
+}
+
+/** A deliberately small, HTML-free Markdown renderer for model output. */
 export function Markdown({ text }: { text: string }) {
+  const keyFor = createKeyFactory();
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
-  const keyFor = makeKeyFactory();
-  let paragraph: string[] = [];
+  const paragraph: string[] = [];
   let index = 0;
 
   const flush = () => {
     if (paragraph.length === 0) return;
-    const content = paragraph;
-    paragraph = [];
+    const content = [...paragraph];
+    paragraph.length = 0;
     blocks.push(
       <p key={`p-${index}`}>
-        {content.map((line, offset) => (
-          <span key={keyFor(`line-${line}`)}>
-            {offset > 0 ? <br /> : null}
-            {inline(line)}
-          </span>
-        ))}
+        {content.map((line, offset) => {
+          const lineKey = keyFor("line");
+          return (
+            <span key={lineKey}>
+              {offset > 0 ? <br /> : null}
+              {renderInline(line, lineKey)}
+            </span>
+          );
+        })}
       </p>,
     );
   };
 
   while (index < lines.length) {
     const line = lines[index];
-    const fence = /^\s*```/.exec(line);
-    if (fence) {
+    if (/^\s*```/.test(line)) {
       flush();
       const code: string[] = [];
       index += 1;
@@ -96,7 +106,7 @@ export function Markdown({ text }: { text: string }) {
         flush();
         const level = Math.min(6, heading[1].length + 2);
         const Heading = `h${level}` as "h3" | "h4" | "h5" | "h6";
-        blocks.push(<Heading key={`h-${index}`}>{inline(heading[2])}</Heading>);
+        blocks.push(<Heading key={`h-${index}`}>{renderInline(heading[2], `h-${index}`)}</Heading>);
       } else if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
         flush();
         const ordered = /^\s*\d/.test(line);
@@ -105,20 +115,12 @@ export function Markdown({ text }: { text: string }) {
           items.push(lines[index].replace(/^\s*([-*+]|\d+[.)])\s+/, ""));
           index += 1;
         }
+        const list = items.map((item) => {
+          const itemKey = keyFor("item");
+          return <li key={itemKey}>{renderInline(item, itemKey)}</li>;
+        });
         blocks.push(
-          ordered ? (
-            <ol key={`list-${index}`}>
-              {items.map((item) => (
-                <li key={keyFor(`item-${item}`)}>{inline(item)}</li>
-              ))}
-            </ol>
-          ) : (
-            <ul key={`list-${index}`}>
-              {items.map((item) => (
-                <li key={keyFor(`item-${item}`)}>{inline(item)}</li>
-              ))}
-            </ul>
-          ),
+          ordered ? <ol key={`list-${index}`}>{list}</ol> : <ul key={`list-${index}`}>{list}</ul>,
         );
         continue;
       } else {

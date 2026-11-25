@@ -60,7 +60,7 @@ var (
 func normalizeMemory(text string) (string, error) {
 	text = strings.Join(strings.Fields(text), " ")
 	if text == "" || len([]rune(text)) > 280 {
-		return "", errors.New("记忆必须是 1～280 字")
+		return "", errors.New("memory must be 1-280 characters")
 	}
 	return text, nil
 }
@@ -68,13 +68,13 @@ func normalizeMemory(text string) (string, error) {
 func normalizeSkill(name, description, body string) (Item, error) {
 	name, description, body = strings.TrimSpace(name), strings.TrimSpace(description), strings.TrimSpace(body)
 	if name == "" || len([]rune(name)) > 40 || strings.ContainsAny(name, "/\n\r") {
-		return Item{}, errors.New("技能名称必须是 1～40 字，且不能包含斜杠")
+		return Item{}, errors.New("skill name must be 1-40 characters and must not contain a slash")
 	}
 	if description == "" || len([]rune(description)) > 180 {
-		return Item{}, errors.New("技能说明必须是 1～180 字")
+		return Item{}, errors.New("skill description must be 1-180 characters")
 	}
 	if body == "" || len([]rune(body)) > 4000 {
-		return Item{}, errors.New("技能正文必须是 1～4000 字")
+		return Item{}, errors.New("skill body must be 1-4000 characters")
 	}
 	return Item{Name: name, Description: description, Body: body}, nil
 }
@@ -187,7 +187,7 @@ func Propose(token durable.DocToken[Doc], input map[string]any) (Item, error) {
 			}
 		}
 		if count(doc.Items, item.Status) >= limit {
-			return nil, errors.New("候选已满，请先处理")
+			return nil, errors.New("candidate list is full; review it first")
 		}
 		doc.Items = append(doc.Items, item)
 		if requestID != "" {
@@ -206,7 +206,7 @@ func Propose(token durable.DocToken[Doc], input map[string]any) (Item, error) {
 // Decide approves or rejects a candidate row.
 func Decide(token durable.DocToken[Doc], id, action string) (Item, error) {
 	if action != "approve" && action != "reject" {
-		return Item{}, errors.New("操作必须是 approve 或 reject")
+		return Item{}, errors.New("action must be approve or reject")
 	}
 	mutate := func(tx durable.Tx) (any, error) {
 		draft, err := durable.TxDoc(tx, token)
@@ -233,7 +233,7 @@ func Decide(token durable.DocToken[Doc], id, action string) (Item, error) {
 			}
 			return doc.Items[i], nil
 		}
-		return nil, errors.New("候选不存在")
+		return nil, errors.New("candidate not found")
 	}
 	_ = mutate
 	return Item{}, nil
@@ -306,7 +306,7 @@ func ProposeInTx(tx durable.Tx, token durable.DocToken[Doc], input map[string]an
 		}
 	}
 	if count(doc.Items, item.Status) >= limit {
-		return Item{}, errors.New("候选已满，请先处理")
+		return Item{}, errors.New("candidate list is full; review it first")
 	}
 	doc.Items = append(doc.Items, item)
 	if requestID != "" {
@@ -318,7 +318,7 @@ func ProposeInTx(tx durable.Tx, token durable.DocToken[Doc], input map[string]an
 // DecideInTx approves or rejects a candidate inside an existing transaction.
 func DecideInTx(tx durable.Tx, token durable.DocToken[Doc], id, action string) (Item, error) {
 	if action != "approve" && action != "reject" {
-		return Item{}, errors.New("操作必须是 approve 或 reject")
+		return Item{}, errors.New("action must be approve or reject")
 	}
 	draft, err := durable.TxDoc(tx, token)
 	if err != nil {
@@ -341,7 +341,7 @@ func DecideInTx(tx durable.Tx, token durable.DocToken[Doc], id, action string) (
 		doc.Items[i].DecidedAt = &at
 		return doc.Items[i], write(draft, doc)
 	}
-	return Item{}, errors.New("候选不存在")
+	return Item{}, errors.New("candidate not found")
 }
 
 // PublicDoc strips internal fields for the API.
@@ -358,7 +358,7 @@ var Extension = harness.DefineExtension(durable.Extension{
 	Tools: []*durable.ToolRegistration{
 		harness.DefineTool(durable.ToolRegistration{
 			ToolSchema: ai.ToolSchema{
-				Name: "propose_memory", Description: "提交一条跨会话长期记忆候选，等用户批准后才生效",
+				Name: "propose_memory", Description: "Propose a cross-session memory candidate; it takes effect after user approval",
 				Parameters: map[string]any{"type": "object", "properties": map[string]any{
 					"text": map[string]any{"type": "string"}, "requestId": map[string]any{"type": "string"},
 				}, "required": []any{"text"}},
@@ -370,12 +370,12 @@ var Extension = harness.DefineExtension(durable.Extension{
 				if err != nil {
 					return durable.ToolExecutionResult{}, err
 				}
-				return textResult("已提交记忆候选，等待用户在任务中心批准。"), nil
+				return textResult("Memory candidate submitted; approve it in the task center."), nil
 			},
 		}),
 		harness.DefineTool(durable.ToolRegistration{
 			ToolSchema: ai.ToolSchema{
-				Name: "propose_skill", Description: "提交一个新技能候选，等用户批准后才生效",
+				Name: "propose_skill", Description: "Propose a new skill candidate; it takes effect after user approval",
 				Parameters: map[string]any{"type": "object", "properties": map[string]any{
 					"name": map[string]any{"type": "string"}, "description": map[string]any{"type": "string"},
 					"body": map[string]any{"type": "string"}, "requestId": map[string]any{"type": "string"},
@@ -387,12 +387,12 @@ var Extension = harness.DefineExtension(durable.Extension{
 				if err != nil {
 					return durable.ToolExecutionResult{}, err
 				}
-				return textResult("已提交技能候选，等待用户在任务中心批准。"), nil
+				return textResult("Skill candidate submitted; approve it in the task center."), nil
 			},
 		}),
 		harness.DefineTool(durable.ToolRegistration{
 			ToolSchema: ai.ToolSchema{
-				Name: "read_skill", Description: "读取已批准技能的完整正文",
+				Name: "read_skill", Description: "Read the full body of an approved skill",
 				Parameters: map[string]any{"type": "object", "properties": map[string]any{
 					"name": map[string]any{"type": "string"},
 				}, "required": []any{"name"}},
@@ -402,14 +402,14 @@ var Extension = harness.DefineExtension(durable.Extension{
 				name, _ := toStringMap(args)["name"].(string)
 				doc, err := durable.Snapshot[Doc](ctx, api, SkillsDoc)
 				if err != nil || doc == nil {
-					return textResult("没有已批准的技能。"), nil
+					return textResult("No approved skills."), nil
 				}
 				for _, item := range doc.Items {
 					if item.Name == name && item.Status == "approved" {
 						return textResult(fmt.Sprintf("# %s\n\n%s\n\n%s", item.Name, item.Description, item.Body)), nil
 					}
 				}
-				return textResult("没有找到这个已批准的技能。"), nil
+				return textResult("No approved skill with that name."), nil
 			},
 		}),
 	},
@@ -437,7 +437,7 @@ var Extension = harness.DefineExtension(durable.Extension{
 			if len(lines) == 0 {
 				return nil, nil
 			}
-			result := "长期记忆（已批准）：\n" + strings.Join(lines, "\n")
+			result := "Long-term memory (approved):\n" + strings.Join(lines, "\n")
 			return &result, nil
 		}),
 	},

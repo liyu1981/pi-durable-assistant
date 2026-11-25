@@ -5,12 +5,19 @@ import type { PersonalData } from "../api/types";
 import { personalAtom } from "../atoms";
 import { newRequestId } from "../lib/format";
 import { useToast } from "../lib/useToast";
+import { Badge, Button, Field, SectionTitle, StatusMessage } from "./ui";
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "待批准",
-  approved: "已生效",
-  rejected: "已撤回",
+  pending: "Pending",
+  approved: "Active",
+  rejected: "Rejected",
 };
+
+function statusTone(status: string): "warning" | "success" | "danger" {
+  if (status === "pending") return "warning";
+  if (status === "approved") return "success";
+  return "danger";
+}
 
 export function PersonalPanel() {
   const [personal, setPersonal] = useAtom(personalAtom);
@@ -26,7 +33,7 @@ export function PersonalPanel() {
       setPersonal(await get<PersonalData>("/api/personal"));
     } catch (error) {
       toast(
-        `读取记忆和技能失败：${error instanceof Error ? error.message : String(error)}`,
+        `Failed to load memory and skills: ${error instanceof Error ? error.message : String(error)}`,
         "warning",
       );
     }
@@ -46,16 +53,16 @@ export function PersonalPanel() {
   }, [refresh]);
 
   const run = async (label: string, action: () => Promise<unknown>, reset?: () => void) => {
-    setFeedback("正在处理…");
+    setFeedback("Working...");
     try {
       await action();
       reset?.();
-      setFeedback(`${label}完成`);
+      setFeedback(`${label} complete`);
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setFeedback(`${label}失败：${message}`);
-      toast(`${label}失败：${message}`, "warning");
+      setFeedback(`${label} failed: ${message}`);
+      toast(`${label} failed: ${message}`, "warning");
     }
   };
 
@@ -64,25 +71,28 @@ export function PersonalPanel() {
   return (
     <>
       <section>
-        <div className="card-title">记忆与技能</div>
-        <p className="empty-note">
+        <SectionTitle>Memory &amp; skills</SectionTitle>
+        <p className="text-sm text-primary/70">
           {knowledge?.enabled
-            ? `知识库只读：${(knowledge.allow ?? []).join("、") || "全部"}`
-            : `知识库未启用：${knowledge?.reason ?? "未配置"}`}
+            ? `Knowledge base is read-only: ${(knowledge.allow ?? []).join(", ") || "all paths"}`
+            : `Knowledge base unavailable: ${knowledge?.reason ?? "not configured"}`}
         </p>
-        <p className="feedback" role="status" aria-live="polite">
-          {feedback}
-        </p>
+        <div className="mt-2">
+          <StatusMessage>{feedback}</StatusMessage>
+        </div>
       </section>
 
       <section>
-        <div className="card-title">长期记忆</div>
-        <p className="empty-note">跨会话生效。你写下的会直接生效；助手提交的需要先批准。</p>
+        <SectionTitle>Long-term memory</SectionTitle>
+        <p className="text-sm text-primary/70">
+          Memories you write take effect immediately. Assistant proposals need approval.
+        </p>
         <form
+          className="mt-3 flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void run(
-              "保存记忆",
+              "Save memory",
               async () => {
                 await post("/api/personal/memory", { text: memoryText, requestId: newRequestId() });
               },
@@ -90,67 +100,79 @@ export function PersonalPanel() {
             );
           }}
         >
-          <label>
-            要记住的事实
+          <Field label="Fact to remember">
             <input
+              className="field"
               name="text"
               maxLength={280}
               required
               value={memoryText}
-              placeholder="例如：回复用简体中文"
+              placeholder="e.g. Reply with short bullet lists"
               onChange={(event) => setMemoryText(event.target.value)}
             />
-          </label>
-          <button type="submit" className="btn btn-primary">
-            记住
-          </button>
+          </Field>
+          <Button type="submit" variant="primary">
+            Remember
+          </Button>
         </form>
         {(personal?.memory ?? []).length === 0 ? (
-          <p className="empty-note">还没有跨会话记忆</p>
+          <p className="mt-3 text-sm text-primary/70">No cross-session memories yet.</p>
         ) : (
-          (personal?.memory ?? []).map((item) => (
-            <div className="todo" key={item.id}>
-              <span title={item.id}>
-                {item.text} · {STATUS_LABEL[item.status] ?? item.status} ·{" "}
-                {item.source === "user" ? "你写下的" : "助手提交"}
-              </span>
-              <span className="row-between">
-                {item.status === "pending" ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      void run("批准", () => post(`/api/personal/memory/${item.id}/approve`, {}))
-                    }
-                  >
-                    批准
-                  </button>
-                ) : null}
-                {item.status === "pending" || item.status === "approved" ? (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run("撤回", () => post(`/api/personal/memory/${item.id}/reject`, {}))
-                    }
-                  >
-                    {item.status === "approved" ? "撤回" : "驳回"}
-                  </button>
-                ) : null}
-              </span>
-            </div>
-          ))
+          <ul className="mt-3 flex flex-col">
+            {(personal?.memory ?? []).map((item) => (
+              <li key={item.id} className="border-b border-primary/15 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm" title={item.id}>
+                    {item.text}
+                  </span>
+                  <Badge tone={statusTone(item.status)}>
+                    {STATUS_LABEL[item.status] ?? item.status}
+                  </Badge>
+                </div>
+                <p className="label mt-1 text-primary/70">
+                  {item.source === "user" ? "Written by you" : "Proposed by the assistant"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item.status === "pending" ? (
+                    <Button
+                      variant="quiet"
+                      onClick={() =>
+                        void run("Approve", () =>
+                          post(`/api/personal/memory/${item.id}/approve`, {}),
+                        )
+                      }
+                    >
+                      Approve
+                    </Button>
+                  ) : null}
+                  {item.status === "pending" || item.status === "approved" ? (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void run("Reject", () => post(`/api/personal/memory/${item.id}/reject`, {}))
+                      }
+                    >
+                      {item.status === "approved" ? "Revoke" : "Reject"}
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
       <section>
-        <div className="card-title">技能</div>
-        <p className="empty-note">提示里只放名称；助手需要时才读取全文。</p>
+        <SectionTitle>Skills</SectionTitle>
+        <p className="text-sm text-primary/70">
+          Only the name is placed in the prompt; the assistant reads the full body when needed.
+        </p>
         <form
+          className="mt-3 flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void run(
-              "保存技能",
+              "Save skill",
               async () => {
                 await post("/api/personal/skills", {
                   name: skillName,
@@ -167,80 +189,89 @@ export function PersonalPanel() {
             );
           }}
         >
-          <label>
-            名称
+          <Field label="Name">
             <input
+              className="field"
               name="name"
               maxLength={40}
               required
               value={skillName}
               onChange={(event) => setSkillName(event.target.value)}
             />
-          </label>
-          <label>
-            什么时候用
+          </Field>
+          <Field label="When to use it">
             <input
+              className="field"
               name="description"
               maxLength={180}
               required
               value={skillDescription}
               onChange={(event) => setSkillDescription(event.target.value)}
             />
-          </label>
-          <label>
-            步骤
+          </Field>
+          <Field label="Steps">
             <textarea
+              className="field min-h-20 resize-y"
               name="body"
               maxLength={4000}
               required
               value={skillBody}
               onChange={(event) => setSkillBody(event.target.value)}
             />
-          </label>
-          <button type="submit" className="btn btn-primary">
-            保存技能
-          </button>
+          </Field>
+          <Button type="submit" variant="primary">
+            Save skill
+          </Button>
         </form>
         {(personal?.skills ?? []).length === 0 ? (
-          <p className="empty-note">还没有技能</p>
+          <p className="mt-3 text-sm text-primary/70">No skills yet.</p>
         ) : (
-          (personal?.skills ?? []).map((item) => (
-            <div className="todo" key={item.id}>
-              <div>
-                <span title={item.id}>
-                  {item.name}：{item.description} · {STATUS_LABEL[item.status] ?? item.status}
-                </span>
-                <details>
-                  <summary>查看步骤</summary>
-                  <pre>{item.body}</pre>
-                </details>
-              </div>
-              <span className="row-between">
-                {item.status === "pending" ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      void run("批准", () => post(`/api/personal/skills/${item.id}/approve`, {}))
-                    }
-                  >
-                    批准
-                  </button>
-                ) : null}
-                {item.status === "pending" || item.status === "approved" ? (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() =>
-                      void run("撤回", () => post(`/api/personal/skills/${item.id}/reject`, {}))
-                    }
-                  >
-                    {item.status === "approved" ? "撤回" : "驳回"}
-                  </button>
-                ) : null}
-              </span>
-            </div>
-          ))
+          <ul className="mt-3 flex flex-col">
+            {(personal?.skills ?? []).map((item) => (
+              <li key={item.id} className="border-b border-primary/15 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm">
+                      {item.name}: {item.description}
+                    </p>
+                    <details className="mt-1">
+                      <summary className="label cursor-pointer text-secondary">View steps</summary>
+                      <pre className="mt-2 whitespace-pre-wrap break-words border-l-2 border-secondary pl-2 text-xs">
+                        {item.body}
+                      </pre>
+                    </details>
+                  </div>
+                  <Badge tone={statusTone(item.status)}>
+                    {STATUS_LABEL[item.status] ?? item.status}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item.status === "pending" ? (
+                    <Button
+                      variant="quiet"
+                      onClick={() =>
+                        void run("Approve", () =>
+                          post(`/api/personal/skills/${item.id}/approve`, {}),
+                        )
+                      }
+                    >
+                      Approve
+                    </Button>
+                  ) : null}
+                  {item.status === "pending" || item.status === "approved" ? (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        void run("Reject", () => post(`/api/personal/skills/${item.id}/reject`, {}))
+                      }
+                    >
+                      {item.status === "approved" ? "Revoke" : "Reject"}
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </>

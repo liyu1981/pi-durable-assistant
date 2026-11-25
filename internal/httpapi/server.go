@@ -81,17 +81,17 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				fmt.Fprintln(os.Stderr, "请求出错：", s.Config.Redact(fmt.Sprint(recovered)))
-				writeError(w, http.StatusInternalServerError, "服务器出错，详情见服务器日志")
+				fmt.Fprintln(os.Stderr, "request failed:", s.Config.Redact(fmt.Sprint(recovered)))
+				writeError(w, http.StatusInternalServerError, "server error; see server logs")
 			}
 		}()
 		if !s.authorized(r) {
 			w.Header().Set("www-authenticate", `Basic realm="pi-durable-assistant", charset="UTF-8"`)
-			writeError(w, http.StatusUnauthorized, "需要口令")
+			writeError(w, http.StatusUnauthorized, "password required")
 			return
 		}
 		if r.Method != http.MethodGet && !sameOrigin(r) {
-			writeError(w, http.StatusForbidden, "只接受同源请求")
+			writeError(w, http.StatusForbidden, "same-origin requests only")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -138,7 +138,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	payload, err := json.Marshal(value)
 	if err != nil {
 		status = http.StatusInternalServerError
-		payload = []byte(`{"error":"服务器出错，详情见服务器日志"}`)
+		payload = []byte(`{"error":"server error; see server logs"}`)
 	}
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.Header().Set("cache-control", "no-store")
@@ -150,17 +150,17 @@ func readBody(r *http.Request, limit int64) (map[string]any, error) {
 	reader := io.LimitReader(r.Body, limit+1)
 	payload, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, badRequest("请求体读取失败")
+		return nil, badRequest("failed to read request body")
 	}
 	if int64(len(payload)) > limit {
-		return nil, &httpError{status: http.StatusRequestEntityTooLarge, message: "请求太大"}
+		return nil, &httpError{status: http.StatusRequestEntityTooLarge, message: "request too large"}
 	}
 	if len(payload) == 0 {
 		return map[string]any{}, nil
 	}
 	var value map[string]any
 	if err := json.Unmarshal(payload, &value); err != nil || value == nil {
-		return nil, badRequest("请求不是合法 JSON 对象")
+		return nil, badRequest("request must be a valid JSON object")
 	}
 	return value, nil
 }
@@ -171,12 +171,12 @@ func handleError(w http.ResponseWriter, err error) {
 		writeError(w, httpErr.status, httpErr.message)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "请求出错：", redactHook(err.Error()))
-	writeError(w, http.StatusInternalServerError, "服务器出错，详情见服务器日志")
+	fmt.Fprintln(os.Stderr, "request failed:", redactHook(err.Error()))
+	writeError(w, http.StatusInternalServerError, "server error; see server logs")
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotFound, "接口不存在")
+	writeError(w, http.StatusNotFound, "route not found")
 }
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +196,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) crash(w http.ResponseWriter, r *http.Request) {
 	if s.Config.Production && !s.Config.CrashDemo {
-		writeError(w, http.StatusForbidden, "生产环境已禁用模拟崩溃")
+		writeError(w, http.StatusForbidden, "simulated crash is disabled in production")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -217,12 +217,12 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	data, err := fs.ReadFile(s.Assets, name)
 	if err != nil {
 		if strings.Contains(name, ".") {
-			writeError(w, http.StatusNotFound, "文件不存在")
+			writeError(w, http.StatusNotFound, "file not found")
 			return
 		}
 		data, err = fs.ReadFile(s.Assets, "index.html")
 		if err != nil {
-			writeError(w, http.StatusNotFound, "文件不存在")
+			writeError(w, http.StatusNotFound, "file not found")
 			return
 		}
 	}
@@ -255,7 +255,7 @@ func contentTypeFor(name string) string {
 func conversationID(id string) (durable.ConversationId, error) {
 	var value durable.ConversationId
 	if _, err := fmt.Sscan(id, &value); err != nil || value <= 0 {
-		return 0, badRequest("会话不存在")
+		return 0, badRequest("conversation not found")
 	}
 	return value, nil
 }
@@ -263,11 +263,11 @@ func conversationID(id string) (durable.ConversationId, error) {
 func (s *Server) getConversation(r *http.Request, rawID string) (harness.Conversation, error) {
 	id, err := conversationID(rawID)
 	if err != nil {
-		return nil, &httpError{status: http.StatusNotFound, message: "会话不存在"}
+		return nil, &httpError{status: http.StatusNotFound, message: "conversation not found"}
 	}
 	conversation, err := s.Runtime.Harness.Conversation(r.Context(), id)
 	if err != nil || conversation == nil {
-		return nil, &httpError{status: http.StatusNotFound, message: "会话不存在"}
+		return nil, &httpError{status: http.StatusNotFound, message: "conversation not found"}
 	}
 	return conversation, nil
 }

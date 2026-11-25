@@ -32,7 +32,7 @@ var textExtensions = map[string]bool{
 }
 
 var base64Pattern = regexp.MustCompile(`^[A-Za-z0-9+/]*={0,2}$`)
-var markPattern = regexp.MustCompile(`^<附件 name="([^"]*)" type="([^"]*)" size="(\d+)"(/?)>`)
+var markPattern = regexp.MustCompile(`^<attachment name="([^"]*)" type="([^"]*)" size="(\d+)"(/?)>`)
 
 // File is a validated upload.
 type File struct {
@@ -60,7 +60,7 @@ func cleanName(raw any) (string, error) {
 		name = string([]rune(name)[:100])
 	}
 	if name == "" {
-		return "", errors.New("附件缺少文件名")
+		return "", errors.New("attachment is missing a filename")
 	}
 	return name, nil
 }
@@ -68,11 +68,11 @@ func cleanName(raw any) (string, error) {
 func decode(data any, name string) ([]byte, string, error) {
 	s, ok := data.(string)
 	if !ok || s == "" || len(s)%4 != 0 || !base64Pattern.MatchString(s) {
-		return nil, "", fmt.Errorf("附件「%s」不是合法的 base64 数据", name)
+		return nil, "", fmt.Errorf(`attachment "%s" is not valid base64 data`, name)
 	}
 	raw, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
-		return nil, "", fmt.Errorf("附件「%s」不是合法的 base64 数据", name)
+		return nil, "", fmt.Errorf(`attachment "%s" is not valid base64 data`, name)
 	}
 	return raw, s, nil
 }
@@ -98,10 +98,10 @@ func Parse(raw any) ([]File, error) {
 	}
 	items, ok := raw.([]any)
 	if !ok {
-		return nil, errors.New("attachments 必须是数组")
+		return nil, errors.New("attachments must be an array")
 	}
 	if len(items) > MaxFiles {
-		return nil, fmt.Errorf("一次最多上传 %d 个附件", MaxFiles)
+		return nil, fmt.Errorf("at most %d attachments per message", MaxFiles)
 	}
 	files := make([]File, 0, len(items))
 	total := 0
@@ -119,11 +119,11 @@ func Parse(raw any) ([]File, error) {
 		}
 		total += len(rawBytes)
 		if total > MaxTotalSize {
-			return nil, errors.New("附件总大小超过 10MB")
+			return nil, errors.New("total attachment size exceeds 10 MB")
 		}
 		if imageMatches(mime, rawBytes) {
 			if len(rawBytes) > MaxImageSize {
-				return nil, fmt.Errorf("图片「%s」超过 5MB", name)
+				return nil, fmt.Errorf(`image "%s" exceeds 5 MB`, name)
 			}
 			files = append(files, File{Kind: "image", Name: name, MimeType: mime, Size: len(rawBytes), Data: encoded})
 			continue
@@ -131,10 +131,10 @@ func Parse(raw any) ([]File, error) {
 		ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
 		if strings.HasPrefix(mime, "text/") || textExtensions[ext] {
 			if len(rawBytes) > MaxTextSize {
-				return nil, fmt.Errorf("文本文件「%s」超过 200KB", name)
+				return nil, fmt.Errorf(`text file "%s" exceeds 200 KB`, name)
 			}
 			if !utf8.Valid(rawBytes) || bytes.Contains(rawBytes, []byte{0}) {
-				return nil, fmt.Errorf("「%s」不是 UTF-8 文本", name)
+				return nil, fmt.Errorf(`"%s" is not UTF-8 text`, name)
 			}
 			textMime := mime
 			if !strings.HasPrefix(mime, "text/") {
@@ -143,7 +143,7 @@ func Parse(raw any) ([]File, error) {
 			files = append(files, File{Kind: "text", Name: name, MimeType: textMime, Size: len(rawBytes), Text: string(rawBytes)})
 			continue
 		}
-		return nil, fmt.Errorf("暂不支持「%s」这种文件，目前只支持图片（PNG/JPEG/WebP/GIF）和文本类文件", name)
+		return nil, fmt.Errorf(`unsupported file type "%s"; only images (PNG/JPEG/WebP/GIF) and text files are supported`, name)
 	}
 	return files, nil
 }
@@ -158,9 +158,9 @@ func BuildUserContent(text string, files []File) ai.UserContent {
 		parts = append(parts, ai.TextContent{Text: text})
 	}
 	for _, file := range files {
-		head := fmt.Sprintf(`<附件 name="%s" type="%s" size="%d"`, file.Name, file.MimeType, file.Size)
+		head := fmt.Sprintf(`<attachment name="%s" type="%s" size="%d"`, file.Name, file.MimeType, file.Size)
 		if file.Kind == "text" {
-			parts = append(parts, ai.TextContent{Text: head + ">\n" + file.Text + "\n</附件>"})
+			parts = append(parts, ai.TextContent{Text: head + ">\n" + file.Text + "\n</attachment>"})
 		} else {
 			parts = append(parts, ai.TextContent{Text: head + "/>"}, ai.ImageContent{Data: file.Data, MimeType: file.MimeType})
 		}

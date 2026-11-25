@@ -12,6 +12,7 @@ import {
 } from "../atoms";
 import { formatListTime, formatTime } from "../lib/format";
 import { useToast } from "../lib/useToast";
+import { Button, EmptyState } from "./ui";
 
 interface SidebarProps {
   onSelect: (id: number) => void;
@@ -32,7 +33,10 @@ export function Sidebar({ onSelect, onCreated }: SidebarProps) {
     try {
       setConversations(await get<Conversation[]>("/api/conversations"));
     } catch (error) {
-      toast(`拉取会话列表失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      toast(
+        `Failed to load conversations: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
     }
   };
 
@@ -44,7 +48,10 @@ export function Sidebar({ onSelect, onCreated }: SidebarProps) {
       onCreated(created.id);
       await refresh();
     } catch (error) {
-      toast(`新建会话失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      toast(
+        `Failed to create a conversation: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
     }
   };
 
@@ -63,137 +70,142 @@ export function Sidebar({ onSelect, onCreated }: SidebarProps) {
       try {
         setServerInfo(await get<ServerInfo>("/api/info"));
       } catch {
-        // Server info is optional for this action.
+        // Server information is optional for this action.
       }
     } catch (error) {
-      toast(`操作失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(`Action failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
     } finally {
       setBusyId(null);
     }
   };
 
   const visible = conversations.filter((item) =>
-    filter === "archived" ? !!item.archivedAt : !item.archivedAt,
+    filter === "archived" ? Boolean(item.archivedAt) : !item.archivedAt,
   );
   const activeCount = conversations.filter((item) => !item.archivedAt).length;
+  const archivedCount = conversations.length - activeCount;
+
+  const emptyTitle =
+    filter === "archived"
+      ? "No archived conversations"
+      : activeCount === 0 && archivedCount > 0
+        ? "No active conversations"
+        : "No conversations yet";
+  const emptyHint =
+    filter === "archived"
+      ? "Conversations you archive will appear here."
+      : archivedCount > 0
+        ? "Open the Archived tab to find older conversations."
+        : "Create a conversation to begin a durable session.";
 
   return (
-    <aside className="sidebar" aria-label="会话列表">
-      <div className="sidebar-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
-          <span>Pi Durable 助手</span>
+    <aside className="flex h-full w-full flex-col bg-surface" aria-label="Conversations">
+      <div className="border-b border-primary px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="label">Workspace</p>
+            <h2 className="mt-1 font-display text-xl font-bold tracking-tight">Inbox</h2>
+          </div>
+          <Button variant="primary" onClick={() => void create()}>
+            + New
+          </Button>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => void create()}>
-          ＋ 新对话
-        </button>
-        <div className="tabs" role="tablist" aria-label="会话范围">
+        <div className="mt-4 flex gap-2" role="tablist" aria-label="Conversation scope">
           <button
             type="button"
-            className="tab"
             role="tab"
             aria-selected={filter === "active"}
+            className="tab"
             onClick={() => {
               setFilter("active");
               setPendingRemove(null);
             }}
           >
-            当前 {activeCount}
+            Active ({activeCount})
           </button>
           <button
             type="button"
-            className="tab"
             role="tab"
             aria-selected={filter === "archived"}
+            className="tab"
             onClick={() => {
               setFilter("archived");
               setPendingRemove(null);
             }}
           >
-            归档 {conversations.length - activeCount}
+            Archived ({archivedCount})
           </button>
         </div>
       </div>
-      <nav className="conversation-list" aria-label="对话">
+
+      <nav className="scroll-area flex-1 px-2 py-3" aria-label="Conversations">
         {visible.length === 0 ? (
-          <p className="empty-note">
-            {filter === "archived"
-              ? "还没有归档的对话。"
-              : activeCount === 0 && conversations.length > 0
-                ? "当前没有对话，归档里还有记录。"
-                : "当前没有对话。点击“新对话”开始。"}
-          </p>
+          <EmptyState title={emptyTitle} hint={emptyHint} />
         ) : (
-          visible.map((item) => {
-            const isCurrent = item.id === currentId;
-            const confirming = pendingRemove === item.id;
-            const isFork = !!item.forkOf || (item.title ?? "").startsWith("分叉");
-            const stamp =
-              filter === "archived" ? (item.archivedAt ?? item.createdAt) : item.createdAt;
-            return (
-              <article
-                className={`conversation-item${isCurrent ? " is-current" : ""}`}
-                key={item.id}
-              >
-                <button
-                  type="button"
-                  className="conversation-open"
-                  onClick={() => onSelect(item.id)}
+          <ul className="flex flex-col">
+            {visible.map((item) => {
+              const isCurrent = item.id === currentId;
+              const confirming = pendingRemove === item.id;
+              const stamp =
+                filter === "archived" ? (item.archivedAt ?? item.createdAt) : item.createdAt;
+              return (
+                <li
+                  key={item.id}
+                  className={`border-b border-l-4 border-primary/15 px-2 py-3 ${
+                    isCurrent ? "border-l-secondary bg-primary/5" : "border-l-transparent"
+                  }`}
                 >
-                  <span className="conversation-title" title={item.title}>
-                    {isFork ? "⑂ " : ""}
-                    {item.title || "新对话"}
-                  </span>
-                  <span className="conversation-time" title={formatTime(stamp)}>
-                    {formatListTime(stamp)}
-                  </span>
-                </button>
-                {confirming ? (
-                  <div className="conversation-actions">
-                    <span className="empty-note">只从列表移除，记录仍在。</span>
-                    <button
-                      type="button"
-                      className="btn btn-quiet"
-                      onClick={() => setPendingRemove(null)}
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      disabled={busyId !== null}
-                      onClick={() => void shelf(item.id, "remove")}
-                    >
-                      删除
-                    </button>
-                  </div>
-                ) : (
-                  <div className="conversation-actions">
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={busyId !== null}
-                      onClick={() =>
-                        void shelf(item.id, filter === "archived" ? "restore" : "archive")
-                      }
-                    >
-                      {filter === "archived" ? "恢复" : "归档"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      disabled={busyId !== null}
-                      onClick={() => setPendingRemove(item.id)}
-                    >
-                      删除
-                    </button>
-                  </div>
-                )}
-              </article>
-            );
-          })
+                  <button
+                    type="button"
+                    className="flex w-full items-baseline justify-between gap-3 text-left"
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <span className="truncate font-semibold" title={item.title}>
+                      {item.forkOf ? <span className="label mr-1 text-secondary">Fork</span> : null}
+                      {item.title || "Untitled conversation"}
+                    </span>
+                    <span className="label shrink-0 text-primary/70" title={formatTime(stamp)}>
+                      {formatListTime(stamp)}
+                    </span>
+                  </button>
+                  {confirming ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="label text-primary/70">Removed from the list only.</span>
+                      <Button variant="quiet" onClick={() => setPendingRemove(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="danger"
+                        disabled={busyId !== null}
+                        onClick={() => void shelf(item.id, "remove")}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="quiet"
+                        disabled={busyId !== null}
+                        onClick={() =>
+                          void shelf(item.id, filter === "archived" ? "restore" : "archive")
+                        }
+                      >
+                        {filter === "archived" ? "Restore" : "Archive"}
+                      </Button>
+                      <Button
+                        variant="quiet"
+                        disabled={busyId !== null}
+                        onClick={() => setPendingRemove(item.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </nav>
     </aside>

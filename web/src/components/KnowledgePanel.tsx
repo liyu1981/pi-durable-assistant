@@ -4,6 +4,7 @@ import { get } from "../api/client";
 import type { KnowledgePage, KnowledgeSearchResult, PersonalData } from "../api/types";
 import { knowledgePageAtom, knowledgeResultsAtom, personalAtom } from "../atoms";
 import { useToast } from "../lib/useToast";
+import { Badge, Button, CheckboxField, Field, SectionTitle } from "./ui";
 
 export function KnowledgePanel() {
   const [results, setResults] = useAtom(knowledgeResultsAtom);
@@ -40,7 +41,7 @@ export function KnowledgePanel() {
       setResults(found.hits);
       setPage(null);
     } catch (error) {
-      toast(`检索失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(`Search failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
     } finally {
       setBusy(false);
     }
@@ -52,89 +53,92 @@ export function KnowledgePanel() {
       const params = new URLSearchParams({ path, line: String(line) });
       setPage(await get<KnowledgePage>(`/api/knowledge/read?${params.toString()}`));
     } catch (error) {
-      toast(`读取失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(`Read failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
     } finally {
       setBusy(false);
     }
   };
 
+  const knowledge = personal?.knowledge;
+
   return (
     <>
       <section>
-        <div className="card-title">知识检索</div>
-        <p className="empty-note">
-          {personal?.knowledge?.enabled
-            ? `只读范围：${(personal.knowledge.allow ?? []).join("、") || "全部"}`
-            : `知识库未启用：${personal?.knowledge?.reason ?? "未配置"}`}
+        <SectionTitle>Knowledge search</SectionTitle>
+        <p className="text-sm text-primary/70">
+          {knowledge?.enabled
+            ? `Read-only scope: ${(knowledge.allow ?? []).join(", ") || "all paths"}`
+            : `Knowledge base unavailable: ${knowledge?.reason ?? "not configured"}`}
         </p>
         <form
+          className="mt-3 flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void search();
           }}
         >
-          <label>
-            检索词（1～200 字）
+          <Field label="Search term (1-200 characters)">
             <input
+              className="field"
               name="q"
               maxLength={200}
               required
               value={query}
-              placeholder="输入关键词"
+              placeholder="Enter keywords"
               onChange={(event) => setQuery(event.target.value)}
             />
-          </label>
-          <label className="label">
-            <input
-              type="checkbox"
-              checked={history}
-              onChange={(event) => setHistory(event.target.checked)}
-            />
-            包含归档笔记
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={busy || !query.trim()}>
-            搜索
-          </button>
+          </Field>
+          <CheckboxField label="Include archived notes" checked={history} onChange={setHistory} />
+          <Button type="submit" variant="primary" disabled={busy || !query.trim()}>
+            {busy ? "Working..." : "Search"}
+          </Button>
         </form>
       </section>
 
       <section>
-        <div className="card-title">检索结果</div>
+        <SectionTitle>Results</SectionTitle>
         {results.length === 0 ? (
-          <p className="empty-note">输入关键词开始检索。</p>
+          <p className="text-sm text-primary/70">Enter a keyword to start searching.</p>
         ) : (
-          results.map((hit) => (
-            <button
-              type="button"
-              className="example-card"
-              key={`${hit.path}-${hit.line}`}
-              onClick={() => void readPage(hit.path, hit.line)}
-            >
-              <span>
-                {hit.path}:{hit.line === hit.endLine ? hit.line : `${hit.line}-${hit.endLine}`} [
-                {hit.status}]
-              </span>
-              <pre>{hit.excerpt}</pre>
-            </button>
-          ))
+          <ul className="flex flex-col gap-2">
+            {results.map((hit) => (
+              <li key={`${hit.path}-${hit.line}`}>
+                <button
+                  type="button"
+                  className="w-full rounded-sm border border-primary/20 px-3 py-2 text-left hover:border-secondary"
+                  onClick={() => void readPage(hit.path, hit.line)}
+                >
+                  <span className="label flex flex-wrap items-center gap-2 text-primary/70">
+                    {hit.path}:{hit.line === hit.endLine ? hit.line : `${hit.line}-${hit.endLine}`}
+                    <Badge tone="neutral">{hit.status}</Badge>
+                  </span>
+                  <span className="mt-2 block whitespace-pre-wrap break-words text-xs">
+                    {hit.excerpt}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
       {page ? (
         <section>
-          <div className="card-title">笔记内容</div>
-          <p className="label">
+          <SectionTitle>Note content</SectionTitle>
+          <p className="label text-primary/70">
             {page.path}:{page.startLine}-{page.endLine} [{page.status}] {page.revision}
-            {page.truncated ? "（已截断）" : ""}
+            {page.truncated ? " (truncated)" : ""}
           </p>
-          <pre>{page.text}</pre>
-          <button
-            type="button"
-            className="btn"
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words border-l-2 border-secondary pl-3 text-xs">
+            {page.text}
+          </pre>
+          <Button
+            className="mt-3"
+            variant="quiet"
             onClick={() => void readPage(page.path, page.endLine + 1)}
           >
-            读取后续内容
-          </button>
+            Read next section
+          </Button>
         </section>
       ) : null}
     </>

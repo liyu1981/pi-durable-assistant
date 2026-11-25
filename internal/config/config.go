@@ -25,6 +25,7 @@ type Config struct {
 	ObsidianAllow []string
 	CrashDemo     bool
 	Production    bool
+	Dev           bool
 }
 
 func env(name, fallback string) string {
@@ -44,7 +45,7 @@ func envInt(name string, fallback int) int {
 
 // Load reads configuration from the process environment.
 func Load() Config {
-	allow := []string{"AI学习", "X灵感", "VPS小白教程"}
+	allow := []string{"AI Learning", "X Ideas", "VPS Tutorials"}
 	if extra := env("OBSIDIAN_ALLOW", ""); extra != "" {
 		for _, part := range strings.Split(extra, ",") {
 			if part = strings.TrimSpace(part); part != "" {
@@ -69,6 +70,7 @@ func Load() Config {
 		ObsidianAllow: allow,
 		CrashDemo:     os.Getenv("ENABLE_CRASH_DEMO") == "1",
 		Production:    os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
+		Dev:           os.Getenv("DEV") == "1" || os.Getenv("GO_ENV") == "development" || os.Getenv("NODE_ENV") == "development",
 	}
 }
 

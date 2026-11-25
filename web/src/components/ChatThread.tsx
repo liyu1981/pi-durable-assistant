@@ -1,15 +1,11 @@
 import { useAtomValue, useSetAtom } from "jotai/react";
 import { useEffect, useRef } from "react";
-import type { LiveToolSlot, ToolCallView, ToolEntry, ViewPayload } from "../api/types";
-import { busyAtom, draftAtom, viewAtom } from "../atoms";
-import {
-  extractLiveInfo,
-  formatFileSize,
-  formatToolArgs,
-  makeKeyFactory,
-  usageNumbers,
-} from "../lib/format";
+import { imageUrl } from "../api/client";
+import type { LiveToolSlot, ToolCallView, ToolEntry, ViewEntry, ViewPayload } from "../api/types";
+import { busyAtom, currentConversationIdAtom, draftAtom, sseStatusAtom, viewAtom } from "../atoms";
+import { extractLiveInfo, formatFileSize, formatToolArgs, usageNumbers } from "../lib/format";
 import { Markdown } from "./Markdown";
+import { Badge, EmptyState, LoadingState } from "./ui";
 
 interface ChatThreadProps {
   onFork: (entryId: number) => void;
@@ -17,11 +13,61 @@ interface ChatThreadProps {
 }
 
 const EXAMPLES = [
-  "帮我看看 https://pi.dev 首页讲了什么，抓完等 20 秒再总结",
-  "2 分钟后提醒我站起来活动一下",
-  "派一个子 Agent 去看看 https://earendil.com 有什么新文章，再告诉我",
-  "记住：我喜欢简洁、带要点的回答",
+  "Summarize the homepage at https://pi.dev, then wait 20 seconds before the recap",
+  "Remind me to stand up and move in 2 minutes",
+  "Send a subagent to scan https://earendil.com for new articles and report back",
+  "Remember: I prefer concise answers with bullet points",
 ];
+
+const SYSTEM_PREFIXES = [
+  { match: "[Reminder]", label: "Reminder" },
+  { match: "[Scheduled task]", label: "Scheduled task" },
+  { match: "[Background task result]", label: "Background task result" },
+] as const;
+
+const TASK_KINDS: Record<string, string> = {
+  "pi.generation": "Model",
+  "pi.tool": "Tool",
+  "app.reminder": "Reminder",
+  "pi.compaction": "Compaction",
+};
+
+const TASK_STATUSES: Record<string, string> = {
+  pending: "Queued",
+  running: "Running",
+  waiting: "Waiting",
+  completing: "Finalizing",
+};
+
+function taskTone(status: string): "accent" | "warning" | "danger" | "success" {
+  if (status === "running") return "accent";
+  if (status === "waiting" || status === "pending" || status === "completing") return "warning";
+  if (status === "failed" || status === "error") return "danger";
+  return "success";
+}
+
+function SystemNotice({
+  label,
+  tone = "warning",
+  children,
+}: {
+  label: string;
+  tone?: "warning" | "danger" | "accent";
+  children: string;
+}) {
+  const edge =
+    tone === "danger"
+      ? "border-l-danger"
+      : tone === "accent"
+        ? "border-l-secondary"
+        : "border-l-warning";
+  return (
+    <div className={`border-l-4 py-1 pl-4 ${edge}`}>
+      <p className="label text-primary/70">{label}</p>
+      <p className="mt-1 break-words text-sm">{children}</p>
+    </div>
+  );
+}
 
 function ToolCard({
   name,
@@ -40,39 +86,51 @@ function ToolCard({
 }) {
   const isError = Boolean(result?.isError);
   const text = result?.text ?? "";
-  const preview = text.length > 240 ? `${text.slice(0, 240)}…` : text;
+  const preview = text.length > 240 ? `${text.slice(0, 240)}...` : text;
   const runningOutput = running?.output?.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? "";
+  const displayName = name === "delegate" ? "Subagent" : name || "Tool call";
   return (
-    <div className={`tool-card${isError ? " is-error" : ""}`}>
-      <div className="tool-card-head">
-        <span className="tool-name">{name === "delegate" ? "子 Agent" : name || "工具调用"}</span>
-        <span className={`badge ${isError ? "badge-error" : result ? "badge-ok" : "badge-wait"}`}>
-          {isError ? "执行失败" : result ? "已完成" : "运行中"}
-        </span>
+    <div
+      className={`rounded-sm border px-3 py-2 ${isError ? "border-danger" : "border-primary/20"}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="label font-bold">{displayName}</span>
+        <Badge tone={isError ? "danger" : result ? "success" : "warning"}>
+          {isError ? "Failed" : result ? "Done" : "Running"}
+        </Badge>
       </div>
-      {args !== undefined ? <div className="tool-detail">参数：{formatToolArgs(args)}</div> : null}
-      {childId !== undefined ? (
-        <button
-          type="button"
-          className="btn btn-quiet"
-          onClick={() => onSelectConversation(childId)}
-        >
-          查看子 Agent 对话 →
-        </button>
+      {args !== undefined ? (
+        <p className="mt-2 text-xs text-primary/70">Arguments: {formatToolArgs(args)}</p>
       ) : null}
-      <div className="tool-detail">
-        {result ? preview || (isError ? "工具执行出错" : "已完成") : runningOutput || "正在执行…"}
-      </div>
+      {childId !== undefined ? (
+        <ButtonLink onClick={() => onSelectConversation(childId)}>
+          Open subagent conversation
+        </ButtonLink>
+      ) : null}
+      <p className="mt-2 whitespace-pre-wrap break-words text-sm">
+        {result ? preview || (isError ? "Tool failed" : "Done") : runningOutput || "Running..."}
+      </p>
     </div>
+  );
+}
+
+function ButtonLink({ onClick, children }: { onClick: () => void; children: string }) {
+  return (
+    <button type="button" className="btn btn-quiet mt-2" onClick={onClick}>
+      {children} <span aria-hidden="true">-&gt;</span>
+    </button>
   );
 }
 
 function entryHasContent(view: ViewPayload | null): boolean {
   if (!view) return false;
-  return (view.entries ?? []).some((entry) => {
+  return (view.entries ?? []).some((entry: ViewEntry) => {
     if (entry.kind === "assistant")
-      return !!entry.text?.trim() || !!entry.error || (entry.toolCalls?.length ?? 0) > 0;
-    if (entry.kind === "user") return !!entry.text?.trim() || (entry.attachments?.length ?? 0) > 0;
+      return (
+        Boolean(entry.text?.trim()) || Boolean(entry.error) || (entry.toolCalls?.length ?? 0) > 0
+      );
+    if (entry.kind === "user")
+      return Boolean(entry.text?.trim()) || (entry.attachments?.length ?? 0) > 0;
     return true;
   });
 }
@@ -80,10 +138,11 @@ function entryHasContent(view: ViewPayload | null): boolean {
 export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
   const view = useAtomValue(viewAtom);
   const busy = useAtomValue(busyAtom);
+  const sseStatus = useAtomValue(sseStatusAtom);
+  const currentId = useAtomValue(currentConversationIdAtom);
   const setDraft = useSetAtom(draftAtom);
   const scrollRef = useRef<HTMLElement | null>(null);
   const nearBottom = useRef(true);
-  const keyFor = makeKeyFactory();
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -124,48 +183,66 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
   }
 
   const rendered = entries.map((entry, index) => {
-    if (entry.kind === "user") {
-      if (entry.text.startsWith("[定时提醒]")) {
-        return (
-          <div className="system-card" key={entry.id}>
-            ⏰ {entry.text.replace(/^\[定时提醒\]\s*/, "")}
-          </div>
-        );
-      }
+    const system =
+      entry.kind === "user"
+        ? SYSTEM_PREFIXES.find((item) => entry.text.startsWith(item.match))
+        : undefined;
+    if (system) {
       return (
-        <div className="message-row user" key={entry.id}>
+        <SystemNotice key={entry.id} label={system.label}>
+          {entry.text.slice(system.match.length).trimStart()}
+        </SystemNotice>
+      );
+    }
+
+    if (entry.kind === "user") {
+      return (
+        <div key={entry.id} className="ml-auto flex w-full max-w-[85%] flex-col items-end gap-2">
           {entry.attachments && entry.attachments.length > 0 ? (
-            <div className="attachment-grid">
-              {entry.attachments.map((attachment) =>
-                attachment.kind === "image" && attachment.url ? (
-                  <a
-                    href={attachment.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    key={keyFor(`image-${attachment.url}`)}
-                  >
-                    <img src={attachment.url} alt={attachment.name} loading="lazy" />
-                  </a>
-                ) : (
+            <div className="flex flex-wrap justify-end gap-2">
+              {entry.attachments.map((attachment) => {
+                const url =
+                  attachment.url ??
+                  (currentId !== null && attachment.index !== undefined
+                    ? imageUrl(currentId, entry.id, attachment.index)
+                    : undefined);
+                if (attachment.kind === "image" && url) {
+                  return (
+                    <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={url}
+                        alt={attachment.name}
+                        loading="lazy"
+                        className="max-h-44 max-w-60 rounded-sm border border-primary/20 object-contain"
+                      />
+                    </a>
+                  );
+                }
+                return (
                   <span
-                    className="file-chip"
-                    key={keyFor(`file-${attachment.name}`)}
+                    key={attachment.name}
+                    className="label inline-flex items-center gap-2 rounded-sm border border-primary/20 px-2 py-1"
                     title={attachment.name}
                   >
-                    📄 {attachment.name} · {formatFileSize(attachment.size)}
+                    <span className="text-secondary">File</span>
+                    {attachment.name} - {formatFileSize(attachment.size)}
                   </span>
-                ),
-              )}
+                );
+              })}
             </div>
           ) : null}
-          {entry.text.trim() ? <div className="user-bubble">{entry.text}</div> : null}
+          {entry.text.trim() ? (
+            <div className="whitespace-pre-wrap break-words rounded-md bg-primary px-4 py-3 text-surface">
+              {entry.text}
+            </div>
+          ) : null}
           <button
             type="button"
             className="btn btn-quiet"
             onClick={() => onFork(entry.id)}
-            title="从这里分叉"
+            title="Fork a new conversation from this message"
           >
-            ⑂ 从这里分叉
+            Fork here
           </button>
         </div>
       );
@@ -175,16 +252,16 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
       if (entry.error) {
         if (hiddenErrors.has(index)) return null;
         return (
-          <div className="system-card error" key={entry.id}>
-            模型调用失败：{entry.error}
-          </div>
+          <SystemNotice key={entry.id} label="Model call failed" tone="danger">
+            {entry.error}
+          </SystemNotice>
         );
       }
       const calls: ToolCallView[] = entry.toolCalls ?? [];
       return (
-        <div className="message-row assistant" key={entry.id}>
+        <div key={entry.id} className="flex flex-col gap-3">
           {entry.text.trim() ? (
-            <div className="assistant-bubble">
+            <div className="prose-min border-l-2 border-secondary pl-4">
               <Markdown text={entry.text} />
             </div>
           ) : null}
@@ -215,14 +292,13 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
 
     if (renderedCalls.has(String(entry.toolCallId))) return null;
     return (
-      <div className="message-row tool" key={entry.id}>
-        <ToolCard
-          name={entry.name ?? "工具调用"}
-          result={entry}
-          running={liveTools.get(String(entry.toolCallId))}
-          onSelectConversation={onSelectConversation}
-        />
-      </div>
+      <ToolCard
+        key={entry.id}
+        name={entry.name ?? "Tool call"}
+        result={entry}
+        running={liveTools.get(String(entry.toolCallId))}
+        onSelectConversation={onSelectConversation}
+      />
     );
   });
 
@@ -230,76 +306,104 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
     (slot) => slot.callId === undefined || !renderedCalls.has(String(slot.callId)),
   );
   const showLive =
-    busy && (!!live.text || !!live.thinking || unrendered.length > 0 || !!view?.live?.generation);
+    busy &&
+    (Boolean(live.text) ||
+      Boolean(live.thinking) ||
+      unrendered.length > 0 ||
+      Boolean(view?.live?.generation));
   const { input, output, total } = usageNumbers(view?.usage ?? null);
+  const tasks = view?.tasks ?? [];
+  const showLoading = view === null && sseStatus !== "closed";
 
   return (
     <section
-      className="messages"
+      className="scroll-area flex-1 px-6 py-8"
       ref={scrollRef}
       onScroll={onScroll}
       aria-live="polite"
-      aria-label="对话内容"
+      aria-label="Conversation thread"
     >
-      {!entryHasContent(view) && !busy ? (
-        <div className="empty-chat">
-          <h2>开始与你的持久化助手对话</h2>
-          <p className="empty-note">支持断点恢复、定时提醒与子 Agent 协同。点击示例填入输入框：</p>
-          <div className="example-grid">
-            {EXAMPLES.map((example) => (
-              <button
-                type="button"
-                className="example-card"
-                key={example}
-                onClick={() => setDraft(example)}
-              >
-                <span>{example}</span>
-                <small>点击填入输入框</small>
-              </button>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        {showLoading ? (
+          <LoadingState label="Connecting to conversation" />
+        ) : !entryHasContent(view) && !busy ? (
+          <EmptyState
+            title="Start a durable conversation"
+            hint="Sessions survive restarts and can schedule reminders or delegate subagents. Select a prompt to fill the composer:"
+          >
+            <div className="grid gap-2 text-left sm:grid-cols-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  type="button"
+                  key={example}
+                  className="rounded-sm border border-primary/20 px-3 py-3 text-left text-sm hover:border-secondary"
+                  onClick={() => setDraft(example)}
+                >
+                  {example}
+                  <span className="label mt-2 block text-primary/70">Use this prompt</span>
+                </button>
+              ))}
+            </div>
+          </EmptyState>
+        ) : (
+          rendered
+        )}
+
+        {showLive ? (
+          <div className="flex flex-col gap-3 border-l-2 border-secondary pl-4">
+            {live.text ? (
+              <div className="prose-min">
+                <Markdown text={live.text} />
+                <span className="cursor" aria-hidden="true" />
+              </div>
+            ) : live.thinking ? (
+              <p className="text-sm text-primary/70">Thinking: {live.thinking}</p>
+            ) : view?.live?.generation ? (
+              <p className="text-sm text-primary/70">
+                Thinking
+                <span className="cursor" aria-hidden="true" />
+              </p>
+            ) : null}
+            {unrendered.map((slot) => (
+              <ToolCard
+                key={`live-${slot.callId ?? slot.name ?? "tool"}`}
+                name={slot.name ?? "Tool call"}
+                args={slot.args}
+                running={slot}
+                onSelectConversation={onSelectConversation}
+              />
             ))}
           </div>
-        </div>
-      ) : (
-        rendered
-      )}
+        ) : null}
 
-      {showLive ? (
-        <div className="message-row assistant">
-          {live.text ? (
-            <div className="assistant-bubble">
-              <Markdown text={live.text} />
-              <span className="cursor" aria-hidden="true" />
-            </div>
-          ) : live.thinking ? (
-            <div className="assistant-bubble">💭 正在思考：{live.thinking}</div>
-          ) : view?.live?.generation ? (
-            <div className="assistant-bubble">
-              正在思考
-              <span className="cursor" aria-hidden="true" />
-            </div>
-          ) : null}
-          {unrendered.map((slot) => (
-            <ToolCard
-              key={keyFor(`live-${slot.callId ?? slot.name ?? "tool"}`)}
-              name={slot.name ?? "工具"}
-              args={slot.args}
-              running={slot}
-              onSelectConversation={onSelectConversation}
-            />
-          ))}
-        </div>
-      ) : null}
+        {tasks.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-primary/20 pt-4">
+            <span className="label text-primary/70">Tasks</span>
+            {tasks.slice(0, 4).map((task) => (
+              <Badge key={task.id} tone={taskTone(task.status)}>
+                {TASK_KINDS[task.kind] ?? task.kind}: {TASK_STATUSES[task.status] ?? task.status}
+              </Badge>
+            ))}
+            {tasks.length > 4 ? (
+              <span className="label text-primary/70">+{tasks.length - 4} more</span>
+            ) : null}
+          </div>
+        ) : null}
 
-      {view && total > 0 ? (
-        <div className="stat-row" title="本次会话 Token 用量">
-          <span>
-            会话 Token：入 {input} · 出 {output}
-          </span>
-          <span className="usage-bar">
-            <span style={{ width: `${Math.round((input / total) * 100)}%` }} />
-          </span>
-        </div>
-      ) : null}
+        {view && total > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 border-t border-primary/20 pt-4">
+            <span className="label text-primary/70">
+              Session tokens: in {input} / out {output}
+            </span>
+            <span className="h-1 max-w-40 flex-1 bg-primary/10" aria-hidden="true">
+              <span
+                className="block h-full bg-secondary"
+                style={{ width: `${Math.round((input / total) * 100)}%` }}
+              />
+            </span>
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

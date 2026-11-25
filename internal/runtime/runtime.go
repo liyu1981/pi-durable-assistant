@@ -42,10 +42,10 @@ func createModels(cfg config.Config) (*ai.Models, durable.ModelRef, string, erro
 	case "anthropic-messages":
 		streams = ai.AnthropicMessagesAPI()
 	default:
-		return nil, durable.ModelRef{}, "", fmt.Errorf("不支持的 LLM_API：%s（本地演示请用 make dev-faux）", cfg.API)
+		return nil, durable.ModelRef{}, "", fmt.Errorf("unsupported LLM_API:%s(for the local demo use pnpm dev:demo)", cfg.API)
 	}
 	if cfg.BaseURL == "" || cfg.Model == "" {
-		return nil, durable.ModelRef{}, "", fmt.Errorf("缺少 LLM_BASE_URL 或 LLM_MODEL")
+		return nil, durable.ModelRef{}, "", fmt.Errorf("missing LLM_BASE_URL or LLM_MODEL")
 	}
 	apiType = ai.API(cfg.API)
 	compat := &ai.ModelCompat{}
@@ -115,7 +115,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		Models:   models,
 		Registry: registry,
 		OnReport: func(report durable.Report) {
-			fmt.Fprintln(os.Stderr, "Harness 报告：", cfg.Redact(report.Error.Error()))
+			fmt.Fprintln(os.Stderr, "Harness report:", cfg.Redact(report.Error.Error()))
 		},
 	})
 	if err != nil {

@@ -1,0 +1,22 @@
+{
+  "name": "pi-durable-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "web:install": "pnpm --dir web install --frozen-lockfile",
+    "web:dev": "pnpm --dir web dev",
+    "web:typecheck": "pnpm --dir web typecheck",
+    "web:check": "pnpm --dir web check",
+    "web:format": "pnpm --dir web format",
+    "web:build": "pnpm --dir web build",
+    "dev": "DEV=1 LLM_API=openai-completions LLM_BASE_URL=http://127.0.0.1:18789/v1 LLM_API_KEY=faux LLM_MODEL=faux-1 go run .",
+    "dev:faux": "FAUX_PORT=18789 go run ./cmd/faux-llm",
+    "dev:demo": "FAUX_PORT=18789 go run ./cmd/faux-llm & DEV=1 LLM_API=openai-completions LLM_BASE_URL=http://127.0.0.1:18789/v1 LLM_API_KEY=faux LLM_MODEL=faux-1 go run .; kill %1 2>/dev/null || true",
+    "build": "pnpm web:install && pnpm web:build && CGO_ENABLED=0 go build -trimpath -o bin/pi-durable-assistant .",
+    "test": "go test ./...",
+    "check": "pnpm test && CGO_ENABLED=0 go build ./... && pnpm web:typecheck && pnpm web:check && pnpm web:build",
+    "format": "gofmt -w . && pnpm web:format",
+    "docker": "docker compose build"
+  }
+}

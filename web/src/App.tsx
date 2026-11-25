@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useState } from "react";
-import { get, post, subscribeView } from "./api/client";
+import { exportUrl, get, post, subscribeView } from "./api/client";
 import type { Conversation, ServerInfo } from "./api/types";
 import {
   conversationFilterAtom,
@@ -18,6 +18,7 @@ import { Drawer } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
 import { StatusPanel } from "./components/StatusPanel";
 import { ToastContainer } from "./components/ToastContainer";
+import { Badge, Button } from "./components/ui";
 import { useToast } from "./lib/useToast";
 
 function hashConversationId(): number | null {
@@ -45,7 +46,10 @@ export function App() {
     try {
       setConversations(await get<Conversation[]>("/api/conversations"));
     } catch (error) {
-      toast(`拉取会话列表失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      toast(
+        `Failed to load conversations: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
     }
   }, [setConversations, toast]);
 
@@ -81,7 +85,10 @@ export function App() {
       await refreshConversations();
       return created.id;
     } catch (error) {
-      toast(`新建会话失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      toast(
+        `Failed to create a conversation: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
       return null;
     }
   }, [setFilter, setPendingRemove, setCurrentId, setView, refreshConversations, toast]);
@@ -106,7 +113,10 @@ export function App() {
           window.location.hash = String(chosen);
         }
       } catch (error) {
-        toast(`初始化失败：${error instanceof Error ? error.message : String(error)}`, "error");
+        toast(
+          `Initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
       }
       await refreshInfo();
     };
@@ -175,74 +185,108 @@ export function App() {
       await refreshConversations();
       select(created.id);
     } catch (error) {
-      toast(`分叉失败：${error instanceof Error ? error.message : String(error)}`, "warning");
+      toast(`Fork failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
     }
   };
 
   const current = conversations.find((item) => item.id === currentId);
   const title =
     currentId === null
-      ? "未选择对话"
-      : `${current?.forkOf ? "⑂ " : ""}${current?.title || (view?.parentId ? `子 Agent 会话 #${currentId}` : "新对话")}`;
+      ? "No conversation selected"
+      : `${current?.forkOf ? "Fork - " : ""}${current?.title || (view?.parentId ? `Subagent session #${currentId}` : "New conversation")}`;
+  const connectionTone =
+    sseStatus === "open" ? "success" : sseStatus === "reconnecting" ? "warning" : "neutral";
+  const connectionLabel =
+    sseStatus === "open"
+      ? "Connected"
+      : sseStatus === "reconnecting"
+        ? "Reconnecting"
+        : "Connecting";
 
   return (
-    <div className="app-root">
+    <div className="flex h-dvh flex-col bg-surface text-text">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-primary px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="quiet"
+            className="min-[761px]:hidden"
+            aria-label="Toggle conversation list"
+            aria-expanded={mobileNav}
+            onClick={() => setMobileNav((previous) => !previous)}
+          >
+            Inbox
+          </Button>
+          <span
+            className="grid h-9 w-9 place-items-center rounded-sm bg-primary font-display text-lg font-bold text-surface"
+            aria-hidden="true"
+          >
+            P
+          </span>
+          <div>
+            <p className="label">Pi Durable</p>
+            <p className="font-display text-lg font-bold tracking-tight">Assistant</p>
+          </div>
+        </div>
+        <nav className="flex flex-wrap items-center justify-end gap-2" aria-label="Tools">
+          <Badge tone={connectionTone}>{connectionLabel}</Badge>
+          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "tasks" })}>
+            Tasks
+          </Button>
+          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "personal" })}>
+            Memory
+          </Button>
+          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
+            Knowledge
+          </Button>
+        </nav>
+      </header>
+
       {sseStatus === "reconnecting" ? (
-        <div className="reconnect-banner" role="status">
-          与服务器断开，正在重连…
+        <div className="shrink-0 border-b border-warning px-4 py-2" role="status">
+          <span className="label text-warning">Connection lost. Reconnecting...</span>
         </div>
       ) : null}
-      <div className="app-shell">
-        <div className={mobileNav ? "sidebar-wrap open" : "sidebar-wrap"}>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] max-[1100px]:grid-cols-[260px_minmax(0,1fr)] max-[760px]:grid-cols-[minmax(0,1fr)]">
+        {mobileNav ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-primary/50 min-[761px]:hidden"
+            aria-label="Close conversation list"
+            onClick={() => setMobileNav(false)}
+          />
+        ) : null}
+        <div
+          className={`${
+            mobileNav ? "block" : "hidden"
+          } min-[761px]:block max-[760px]:fixed max-[760px]:bottom-0 max-[760px]:left-0 max-[760px]:top-0 max-[760px]:z-50 max-[760px]:w-[min(300px,85vw)] max-[760px]:border-r max-[760px]:border-primary`}
+        >
           <Sidebar onSelect={select} onCreated={(id) => select(id)} />
         </div>
-        <main className="chat-column">
-          <header className="chat-header">
-            <div className="row-between">
-              <button
-                type="button"
-                className="btn mobile-only"
-                aria-label="打开会话列表"
-                onClick={() => setMobileNav((previous) => !previous)}
-              >
-                会话
-              </button>
-              <h2 title={title}>{title}</h2>
-              <div className="row-between">
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setDrawer({ open: true, panel: "tasks" })}
-                >
-                  任务中心
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setDrawer({ open: true, panel: "personal" })}
-                >
-                  记忆
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setDrawer({ open: true, panel: "knowledge" })}
-                >
-                  知识
-                </button>
-              </div>
+
+        <main
+          data-chat-column
+          className="relative flex min-w-0 flex-col border-r border-primary bg-surface"
+        >
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-primary px-6 py-4">
+            <div className="min-w-0">
+              <p className="label">Conversation</p>
+              <h2 className="truncate font-display text-2xl font-bold tracking-tight" title={title}>
+                {title}
+              </h2>
             </div>
+            {currentId !== null ? (
+              <a className="btn" href={exportUrl(currentId)} download>
+                Export
+              </a>
+            ) : null}
           </header>
           {view?.parentId ? (
-            <div className="parent-banner">
-              <span>这是子 Agent 的对话</span>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                onClick={() => select(view.parentId as number)}
-              >
-                ← 返回主对话
-              </button>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-secondary px-6 py-2">
+              <span className="label text-secondary">Subagent conversation</span>
+              <Button variant="quiet" onClick={() => select(view.parentId as number)}>
+                Back to parent
+              </Button>
             </div>
           ) : null}
           <ChatThread onFork={(entryId) => void fork(entryId)} onSelectConversation={select} />
@@ -251,8 +295,10 @@ export function App() {
             onSent={() => void refreshConversations()}
           />
         </main>
+
         <StatusPanel />
       </div>
+
       <Drawer />
       <ToastContainer />
     </div>

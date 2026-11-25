@@ -26,7 +26,7 @@ func writeDoc(draft *delta.Object, value any) error {
 	}
 	object, ok := jsonValue.(*delta.JsonObject)
 	if !ok {
-		return fmt.Errorf("文档值必须是 JSON 对象")
+		return fmt.Errorf("document value must be a JSON object")
 	}
 	for _, key := range object.Keys() {
 		entry, _ := object.Get(key)
@@ -186,7 +186,7 @@ func (s *Server) manageSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	action := r.PathValue("action")
 	if action != "pause" && action != "resume" && action != "cancel" {
-		writeError(w, http.StatusNotFound, "接口不存在")
+		writeError(w, http.StatusNotFound, "route not found")
 		return
 	}
 	var item docs.ScheduleItem
@@ -207,17 +207,17 @@ func (s *Server) manageSchedule(w http.ResponseWriter, r *http.Request) {
 			switch action {
 			case "pause":
 				if target.Status != "active" {
-					return nil, badRequest("当前状态不能暂停")
+					return nil, badRequest("current status cannot be paused")
 				}
 				target.Status = "paused"
 			case "cancel":
 				if target.Status != "active" && target.Status != "paused" {
-					return nil, badRequest("当前状态不能取消")
+					return nil, badRequest("current status cannot be cancelled")
 				}
 				target.Status = "cancelled"
 			case "resume":
 				if target.Status != "paused" {
-					return nil, badRequest("当前状态不能恢复")
+					return nil, badRequest("current status cannot be resumed")
 				}
 				target.Status = "active"
 				if target.NextAt <= schedule.NowMillis() {
@@ -237,7 +237,7 @@ func (s *Server) manageSchedule(w http.ResponseWriter, r *http.Request) {
 			item = *target
 			return nil, writeDoc(draft, doc)
 		}
-		return nil, badRequest("计划任务不存在")
+		return nil, badRequest("schedule not found")
 	})
 	if err != nil {
 		handleError(w, err)
@@ -262,7 +262,7 @@ func (s *Server) createBackground(w http.ResponseWriter, r *http.Request) {
 	}
 	text, _ := body["text"].(string)
 	if text == "" || len([]rune(text)) > 4000 {
-		writeError(w, http.StatusBadRequest, "后台任务说明必须是 1～4000 字")
+		writeError(w, http.StatusBadRequest, "background task text must be 1-4000 characters")
 		return
 	}
 	requestID, err := schedule.NormalizeRequestId(body["requestId"])
@@ -331,13 +331,13 @@ func (s *Server) stopBackground(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if doc.Items[i].Status != "running" {
-				return nil, badRequest("任务已结束或不存在")
+				return nil, badRequest("task already finished or not found")
 			}
 			doc.Items[i].Status = "cancelled"
 			item = doc.Items[i]
 			return nil, writeDoc(draft, doc)
 		}
-		return nil, badRequest("任务已结束或不存在")
+		return nil, badRequest("task already finished or not found")
 	})
 	if err != nil {
 		handleError(w, err)
@@ -370,13 +370,13 @@ func (s *Server) cancelReminder(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if doc.Items[i].Status != "scheduled" {
-				return nil, badRequest("提醒已结束或不存在")
+				return nil, badRequest("reminder already finished or not found")
 			}
 			doc.Items[i].Status = "cancelled"
 			item = doc.Items[i]
 			return nil, writeDoc(draft, doc)
 		}
-		return nil, badRequest("提醒已结束或不存在")
+		return nil, badRequest("reminder already finished or not found")
 	})
 	if err != nil {
 		handleError(w, err)
@@ -406,7 +406,7 @@ func (s *Server) getPersonal(w http.ResponseWriter, r *http.Request) {
 func (s *Server) postPersonal(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")
 	if kind != "memory" && kind != "skills" && kind != "skill" {
-		writeError(w, http.StatusNotFound, "接口不存在")
+		writeError(w, http.StatusNotFound, "route not found")
 		return
 	}
 	body, err := readBody(r, 100_000)
@@ -434,7 +434,7 @@ func (s *Server) postPersonal(w http.ResponseWriter, r *http.Request) {
 func (s *Server) decidePersonal(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")
 	if kind != "memory" && kind != "skills" && kind != "skill" {
-		writeError(w, http.StatusNotFound, "接口不存在")
+		writeError(w, http.StatusNotFound, "route not found")
 		return
 	}
 	token := personal.MemoryDoc

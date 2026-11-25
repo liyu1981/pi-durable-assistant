@@ -1,59 +1,61 @@
 # Pi Durable Assistant (Go rewrite)
 
-A self-hosted, single-user durable AI assistant: a **single static Go binary** with an embedded React UI, backed by PiG's Durable runtime and SQLite. Features: crash recovery, resumable tasks, web chat with SSE, subagents, scheduled jobs, task center, memory/skills, attachments, read-only Obsidian search, and optional webhook notifications.
+A self-hosted, single-user durable AI assistant: one static Go binary with an embedded React UI, backed by PiG's Durable runtime and SQLite. Features: crash recovery, resumable tasks, web chat over SSE, subagents, scheduled jobs, a task center, memory and skills, attachments, read-only note search, and optional webhook notifications.
 
 > Experimental, single-user project. Not an official Pi or PiG product. Back up the SQLite volume and restrict access before exposing it on a VPS.
 
 ## Tech stack
 
 - Go 1.26 / toolchain 1.27.4, `github.com/MichaelKinsy/PiG` v0.7.0 (`durable`, `durable/harness`, `ai`, pure-Go SQLite)
-- React 19, TypeScript 7, Vite 8, Tailwind CSS 4, Jotai 3, Biome 2 — compiled into `web/dist` and embedded with `go:embed`
-- Docker multi-stage build + Compose; no Node.js required at runtime
-- `make` targets mirror the whole workflow
+- React 19, TypeScript 7, Vite 8, Tailwind CSS 4, Jotai 3, Biome 2, installed with pnpm; compiled into `web/dist` and embedded with `go:embed`
+- Multi-stage Docker build; no Node.js required at runtime
+- All build targets live in `package.json` (`pnpm <script>`); there is no Makefile
 
 ## Quick start (no real API key)
 
 ```bash
-make web                 # one-time: build embedded frontend
-make dev-faux            # starts dev-only faux provider :18789 and app :3000
+pnpm install
+pnpm dev:demo       # faux provider on :18789, app on 0.0.0.0:3111
 ```
 
-Open http://127.0.0.1:3000. The deterministic local demo script (add todos → wait 10s → complete todos → final answer) is served by `cmd/faux-llm`, a **development-only** process outside the main binary.
+In development the server always binds `0.0.0.0:3111`. Open http://localhost:3111.
+
+The deterministic local script (add todos, wait 10 seconds, complete todos, final answer) is served by `cmd/faux-llm`, a development-only process outside the main binary. To run only the app in dev mode, use `pnpm dev` with the faux server already running.
 
 ## Connect a real model
 
-Create `.env` (do not commit) with `DEMO_PASSWORD`, `LLM_API` (`openai-completions`, `openai-responses`, `anthropic-messages`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. Then:
+Create `.env` (do not commit) with `DEMO_PASSWORD`, `LLM_API` (`openai-completions`, `openai-responses`, `anthropic-messages`), `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`. Then:
 
 ```bash
-make build
+pnpm build
 ./bin/pi-durable-assistant
 ```
 
-With `DEMO_PASSWORD` set the server binds `0.0.0.0`; without it, loopback only. Production requires a password.
+With `DEMO_PASSWORD` set the server binds `0.0.0.0:3000`; without it, loopback only. Production requires a password.
 
 ## Self-host
 
 ```bash
 cp .env.example .env      # set DEMO_PASSWORD and model configuration
-docker compose up -d --build
+pnpm docker               # docker compose build
+docker compose up -d
 docker compose ps
 ```
 
-The container publishes only `127.0.0.1:3300` by default. Use an HTTPS reverse proxy and keep HTTP Basic Auth (`demo` user). SQLite lives in the named `/data` volume — never remove it as an upgrade step.
+The container publishes only `127.0.0.1:3300` by default. Use an HTTPS reverse proxy and keep HTTP Basic Auth (`demo` user). SQLite lives in the named `/data` volume; never remove it as an upgrade step.
 
 ## HTTP API
 
 `GET /api/info`, `GET|POST /api/conversations`, `GET /api/conversations/{id}/events` (SSE), `POST /api/conversations/{id}/{messages,fork,abort,archive,restore,remove}`, `GET /api/conversations/{id}/{management,export.md}`, `POST /api/conversations/{id}/{schedules,background}`, schedule/background/reminder management, `GET|POST /api/personal`, `GET /api/knowledge/{search,read}`, `POST /api/crash`. All endpoints use HTTP Basic Auth when a password is configured; writes require same-origin.
 
-WeChat is intentionally not part of this release.
+WeChat is intentionally not part of this release. All source, UI text, and documentation are English-only.
 
 ## Verification
 
 ```bash
-make check                                     # go test ./... + go build
-cd web && npm run typecheck && npm run check && npm run build
+pnpm check              # go test ./..., go build, web typecheck, Biome, Vite build
 ```
 
-See `doc/REWRITE_PLAN.md` for the full rewrite plan, `doc/PIG_SPIKE.md` for verified PiG API notes, and `doc/DESIGN_QA.md` for the design checklist.
+See `doc/REWRITE_PLAN.md`, `doc/PIG_SPIKE.md`, and `doc/DESIGN_QA.md`.
 
 **License:** MIT. Not affiliated with Pi, PiG, or official WeChat teams.
