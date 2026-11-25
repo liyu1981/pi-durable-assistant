@@ -5,6 +5,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@utility app-header-shadow {
+  box-shadow: 0 2px 8px -4px color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

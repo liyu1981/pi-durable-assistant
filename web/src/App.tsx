@@ -6,11 +6,15 @@ import {
   BrainIcon,
   DownloadIcon,
   Menu01Icon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
   SettingsIcon,
   Wifi01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAtomValue, useSetAtom } from "jotai/react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +35,9 @@ import {
   conversationsAtom,
   currentConversationIdAtom,
   drawerAtom,
+  leftPanelCollapsedAtom,
   pendingRemoveAtom,
+  rightPanelCollapsedAtom,
   serverInfoAtom,
   sseStatusAtom,
   viewAtom,
@@ -51,6 +57,8 @@ function hashConversationId(): number | null {
 
 export function App() {
   const currentId = useAtomValue(currentConversationIdAtom);
+  const [leftCollapsed, setLeftCollapsed] = useAtom(leftPanelCollapsedAtom);
+  const [rightCollapsed, setRightCollapsed] = useAtom(rightPanelCollapsedAtom);
   const setCurrentId = useSetAtom(currentConversationIdAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setView = useSetAtom(viewAtom);
@@ -228,7 +236,7 @@ export function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-muted text-foreground">
-      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-foreground/5 px-4">
+      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-white app-header-shadow px-4">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -348,16 +356,36 @@ export function App() {
         ) : null}
         <aside
           className={[
-            "fixed bottom-0 left-0 top-16 z-50 flex w-[min(320px,85vw)] flex-col border-r border-border bg-muted transition-transform md:z-20 md:w-[260px] md:translate-x-0",
+            "fixed bottom-0 left-0 top-16 z-50 flex w-[min(320px,85vw)] flex-col overflow-hidden border-r border-border bg-muted transition-[width,transform] duration-200 md:z-20",
             mobileNav ? "translate-x-0" : "-translate-x-full",
+            leftCollapsed
+              ? "md:w-0 md:-translate-x-full md:border-r-0 md:pointer-events-none"
+              : "md:w-[260px] md:translate-x-0",
           ].join(" ")}
         >
-          <Sidebar onSelect={select} onCreated={(id) => select(id)} />
+          <div className="relative h-full w-full">
+            <Sidebar onSelect={select} onCreated={(id) => select(id)} />
+            {!leftCollapsed ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-l-md md:inline-flex"
+                aria-label="Collapse conversation list"
+                onClick={() => setLeftCollapsed(true)}
+              >
+                <HugeiconsIcon icon={PanelLeftOpenIcon} strokeWidth={2} />
+              </Button>
+            ) : null}
+          </div>
         </aside>
 
         <main
           data-chat-column
-          className="relative flex min-w-0 flex-1 flex-col border-r border-border bg-muted md:ml-[260px] lg:border-r-0 lg:mr-[300px]"
+          className={[
+            "relative flex min-w-0 flex-1 flex-col border-r border-border bg-muted lg:border-r-0",
+            leftCollapsed ? "md:ml-0" : "md:ml-[260px]",
+            rightCollapsed ? "lg:mr-0" : "lg:mr-[300px]",
+          ].join(" ")}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-4">
             <div className="min-w-0">
@@ -402,9 +430,52 @@ export function App() {
           />
         </main>
 
-        <aside className="fixed bottom-0 right-0 top-16 hidden w-[300px] lg:block">
-          <StatusPanel />
+        <aside
+          className={[
+            "fixed bottom-0 right-0 top-16 z-20 hidden overflow-hidden border-l border-border bg-muted transition-[width,transform] duration-200 lg:block",
+            rightCollapsed
+              ? "w-0 translate-x-full border-l-0 pointer-events-none"
+              : "w-[300px] translate-x-0",
+          ].join(" ")}
+        >
+          <div className="relative h-full w-full">
+            <StatusPanel className="w-[300px]" />
+            {!rightCollapsed ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-r-md lg:inline-flex"
+                aria-label="Collapse status panel"
+                onClick={() => setRightCollapsed(true)}
+              >
+                <HugeiconsIcon icon={PanelRightCloseIcon} strokeWidth={2} />
+              </Button>
+            ) : null}
+          </div>
         </aside>
+
+        {leftCollapsed ? (
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="fixed left-0 top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-l-none bg-background md:inline-flex"
+            aria-label="Expand conversation list"
+            onClick={() => setLeftCollapsed(false)}
+          >
+            <HugeiconsIcon icon={PanelLeftCloseIcon} strokeWidth={2} />
+          </Button>
+        ) : null}
+        {rightCollapsed ? (
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="fixed right-0 top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-r-none bg-background lg:inline-flex"
+            aria-label="Expand status panel"
+            onClick={() => setRightCollapsed(false)}
+          >
+            <HugeiconsIcon icon={PanelRightOpenIcon} strokeWidth={2} />
+          </Button>
+        ) : null}
       </div>
 
       <Drawer />
