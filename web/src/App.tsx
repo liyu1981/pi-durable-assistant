@@ -59,6 +59,17 @@ export function App() {
   const currentId = useAtomValue(currentConversationIdAtom);
   const [leftCollapsed, setLeftCollapsed] = useAtom(leftPanelCollapsedAtom);
   const [rightCollapsed, setRightCollapsed] = useAtom(rightPanelCollapsedAtom);
+  // Delay the icon swap until the panel and trigger have finished moving together.
+  const [leftIconCollapsed, setLeftIconCollapsed] = useState(leftCollapsed);
+  const [rightIconCollapsed, setRightIconCollapsed] = useState(rightCollapsed);
+  useEffect(() => {
+    const timer = setTimeout(() => setLeftIconCollapsed(leftCollapsed), 200);
+    return () => clearTimeout(timer);
+  }, [leftCollapsed]);
+  useEffect(() => {
+    const timer = setTimeout(() => setRightIconCollapsed(rightCollapsed), 200);
+    return () => clearTimeout(timer);
+  }, [rightCollapsed]);
   const setCurrentId = useSetAtom(currentConversationIdAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setView = useSetAtom(viewAtom);
@@ -181,15 +192,6 @@ export function App() {
       setView(null);
     };
   }, [currentId, setView, setSseStatus, refreshConversations, refreshInfo]);
-
-  useEffect(() => {
-    if (currentId !== null && conversations.length > 0 && !view?.parentId) {
-      if (!conversations.some((item) => item.id === currentId)) {
-        setCurrentId(null);
-        setView(null);
-      }
-    }
-  }, [conversations, currentId, view?.parentId, setCurrentId, setView]);
 
   useEffect(() => {
     const timer = setInterval(() => void refreshConversations(), 10_000);
@@ -365,17 +367,6 @@ export function App() {
         >
           <div className="relative h-full w-full">
             <Sidebar onSelect={select} onCreated={(id) => select(id)} />
-            {!leftCollapsed ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-l-md md:inline-flex"
-                aria-label="Collapse conversation list"
-                onClick={() => setLeftCollapsed(true)}
-              >
-                <HugeiconsIcon icon={PanelLeftOpenIcon} strokeWidth={2} />
-              </Button>
-            ) : null}
           </div>
         </aside>
 
@@ -440,42 +431,39 @@ export function App() {
         >
           <div className="relative h-full w-full">
             <StatusPanel className="w-[300px]" />
-            {!rightCollapsed ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-r-md lg:inline-flex"
-                aria-label="Collapse status panel"
-                onClick={() => setRightCollapsed(true)}
-              >
-                <HugeiconsIcon icon={PanelRightCloseIcon} strokeWidth={2} />
-              </Button>
-            ) : null}
           </div>
         </aside>
 
-        {leftCollapsed ? (
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="fixed left-0 top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-l-none bg-background md:inline-flex"
-            aria-label="Expand conversation list"
-            onClick={() => setLeftCollapsed(false)}
-          >
-            <HugeiconsIcon icon={PanelLeftCloseIcon} strokeWidth={2} />
-          </Button>
-        ) : null}
-        {rightCollapsed ? (
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="fixed right-0 top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-r-none bg-background lg:inline-flex"
-            aria-label="Expand status panel"
-            onClick={() => setRightCollapsed(false)}
-          >
-            <HugeiconsIcon icon={PanelRightOpenIcon} strokeWidth={2} />
-          </Button>
-        ) : null}
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className={[
+            "fixed top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-l-none bg-background transition-all duration-200 md:inline-flex",
+            leftCollapsed ? "left-0" : "left-[260px]",
+          ].join(" ")}
+          aria-label={leftCollapsed ? "Expand conversation list" : "Collapse conversation list"}
+          onClick={() => setLeftCollapsed((value) => !value)}
+        >
+          <HugeiconsIcon
+            icon={leftIconCollapsed ? PanelLeftCloseIcon : PanelLeftOpenIcon}
+            strokeWidth={2}
+          />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className={[
+            "fixed top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-r-none bg-background transition-all duration-200 lg:inline-flex",
+            rightCollapsed ? "right-0" : "right-[300px]",
+          ].join(" ")}
+          aria-label={rightCollapsed ? "Expand status panel" : "Collapse status panel"}
+          onClick={() => setRightCollapsed((value) => !value)}
+        >
+          <HugeiconsIcon
+            icon={rightIconCollapsed ? PanelRightOpenIcon : PanelRightCloseIcon}
+            strokeWidth={2}
+          />
+        </Button>
       </div>
 
       <Drawer />

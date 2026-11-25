@@ -213,6 +213,9 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(name, "assets/") {
 		w.Header().Set("cache-control", "public, max-age=31536000, immutable")
+	} else {
+		// The HTML entrypoint points at hashed assets; never let a dev rebuild serve a stale shell.
+		w.Header().Set("cache-control", "no-store")
 	}
 	data, err := fs.ReadFile(s.Assets, name)
 	if err != nil {

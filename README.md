@@ -21,7 +21,7 @@ pnpm dev            # watch + rebuild; app on 0.0.0.0:3111
 
 In development the server always binds `0.0.0.0:3111`. Open http://localhost:3111.
 
-`pnpm dev` starts the dev-only faux provider and `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server.
+`pnpm dev` starts the dev-only faux provider, waits until it is reachable, then starts `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server. The HTML entrypoint is served with `no-store` so a rebuild cannot leave a stale shell in the browser.
 
 The deterministic local script (add todos, wait 10 seconds, complete todos, final answer) is served by `cmd/faux-llm`, a development-only process outside the main binary. Use `pnpm dev:faux` if you only need the provider.
 

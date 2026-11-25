@@ -282,13 +282,14 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case <-notify:
 			if timer == nil {
-				timer = time.AfterFunc(150*time.Millisecond, func() {
+				timer = time.NewTimer(150 * time.Millisecond)
+			} else {
+				if !timer.Stop() {
 					select {
-					case notify <- struct{}{}:
+					case <-timer.C:
 					default:
 					}
-				})
-			} else {
+				}
 				timer.Reset(150 * time.Millisecond)
 			}
 		case <-timerChannel(timer):

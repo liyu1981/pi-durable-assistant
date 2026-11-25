@@ -20,19 +20,24 @@ function start(name, command, args, extraEnv = {}) {
   });
   child.on("error", (error) => {
     console.error(`${name} failed to start:`, error.message);
-    if (name === "air") {
-      console.error("Install it with: pnpm dev:install");
-    }
+    if (name === "air") console.error("Install it with: pnpm dev:install");
   });
   children.push(child);
   return child;
 }
 
-// Development-only OpenAI-compatible provider, outside the main binary.
-start("faux", "go", ["run", "./cmd/faux-llm"]);
-
-// Air watches Go + web sources, debounces changes, rebuilds web then Go, and restarts the binary.
-const air = start("air", "air", ["-c", ".air.toml"]);
+async function waitForFaux() {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const response = await fetch("http://127.0.0.1:18789/v1/models");
+      if (response.ok) return;
+    } catch {
+      // Provider is still compiling/starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("faux provider did not become ready on 127.0.0.1:18789");
+}
 
 function stop(signal = "SIGTERM") {
   if (stopping) return;
@@ -45,6 +50,27 @@ function stop(signal = "SIGTERM") {
 
 process.on("SIGINT", () => stop("SIGINT"));
 process.on("SIGTERM", () => stop("SIGTERM"));
+
+// Start the development-only OpenAI-compatible provider first.
+const faux = start("faux", "go", ["run", "./cmd/faux-llm"]);
+faux.on("exit", (code) => {
+  if (!stopping) {
+    console.error(`faux provider exited with code ${code}`);
+    stop();
+  }
+});
+
+try {
+  await waitForFaux();
+  console.log("faux provider ready; starting air");
+} catch (error) {
+  console.error(error.message);
+  stop();
+  process.exit(1);
+}
+
+// Air watches Go + web sources, debounces changes, rebuilds web then Go, and restarts the binary.
+const air = start("air", "air", ["-c", ".air.toml"]);
 air.on("exit", (code) => {
   stop();
   process.exit(code ?? 0);
