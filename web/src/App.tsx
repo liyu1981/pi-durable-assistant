@@ -1,5 +1,29 @@
+import {
+  ActivityIcon,
+  Alert02Icon,
+  ArrowLeft01Icon,
+  BookOpen01Icon,
+  BrainIcon,
+  DownloadIcon,
+  Menu01Icon,
+  SettingsIcon,
+  Wifi01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { exportUrl, get, post, subscribeView } from "./api/client";
 import type { Conversation, ServerInfo } from "./api/types";
 import {
@@ -18,7 +42,6 @@ import { Drawer } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
 import { StatusPanel } from "./components/StatusPanel";
 import { ToastContainer } from "./components/ToastContainer";
-import { Badge, Button } from "./components/ui";
 import { useToast } from "./lib/useToast";
 
 function hashConversationId(): number | null {
@@ -194,8 +217,8 @@ export function App() {
     currentId === null
       ? "No conversation selected"
       : `${current?.forkOf ? "Fork - " : ""}${current?.title || (view?.parentId ? `Subagent session #${currentId}` : "New conversation")}`;
-  const connectionTone =
-    sseStatus === "open" ? "success" : sseStatus === "reconnecting" ? "warning" : "neutral";
+  const connectionVariant =
+    sseStatus === "open" ? "default" : sseStatus === "reconnecting" ? "secondary" : "outline";
   const connectionLabel =
     sseStatus === "open"
       ? "Connected"
@@ -204,87 +227,170 @@ export function App() {
         : "Connecting";
 
   return (
-    <div className="flex h-dvh flex-col bg-surface text-text">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-primary px-4 py-3">
+    <div className="flex h-dvh flex-col bg-muted text-foreground">
+      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-foreground/5 px-4">
         <div className="flex items-center gap-3">
           <Button
-            variant="quiet"
-            className="min-[761px]:hidden"
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
             aria-label="Toggle conversation list"
             aria-expanded={mobileNav}
             onClick={() => setMobileNav((previous) => !previous)}
           >
-            Inbox
+            <HugeiconsIcon icon={Menu01Icon} strokeWidth={2} />
           </Button>
           <span
-            className="grid h-9 w-9 place-items-center rounded-sm bg-primary font-display text-lg font-bold text-surface"
+            className="grid size-9 place-items-center rounded-xl bg-primary font-heading text-lg font-bold text-primary-foreground"
             aria-hidden="true"
           >
             P
           </span>
           <div>
-            <p className="label">Pi Durable</p>
-            <p className="font-display text-lg font-bold tracking-tight">Assistant</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Pi Durable
+            </p>
+            <p className="font-heading text-lg font-bold tracking-tight">Assistant</p>
           </div>
         </div>
         <nav className="flex flex-wrap items-center justify-end gap-2" aria-label="Tools">
-          <Badge tone={connectionTone}>{connectionLabel}</Badge>
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "tasks" })}>
+          <Badge variant={connectionVariant} className="gap-1">
+            <HugeiconsIcon icon={Wifi01Icon} strokeWidth={2} />
+            {connectionLabel}
+          </Badge>
+          <Separator orientation="vertical" className="mx-1 h-6" />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="md:hidden"
+                  aria-label="Open tools menu"
+                >
+                  <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "status" })}>
+                <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
+                Status
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "tasks" })}>
+                <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
+                Tasks
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "personal" })}>
+                <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
+                Memory &amp; skills
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
+                <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
+                Knowledge
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex lg:hidden"
+            onClick={() => setDrawer({ open: true, panel: "status" })}
+          >
+            Status
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "tasks" })}
+          >
+            <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
             Tasks
           </Button>
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "personal" })}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "personal" })}
+          >
+            <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
             Memory
           </Button>
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "knowledge" })}
+          >
+            <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
             Knowledge
           </Button>
         </nav>
       </header>
 
       {sseStatus === "reconnecting" ? (
-        <div className="shrink-0 border-b border-warning px-4 py-2" role="status">
-          <span className="label text-warning">Connection lost. Reconnecting...</span>
-        </div>
+        <Alert className="shrink-0 rounded-none border-x-0 border-t-0 py-2">
+          <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+          <AlertDescription>Connection lost. Reconnecting...</AlertDescription>
+        </Alert>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] max-[1100px]:grid-cols-[260px_minmax(0,1fr)] max-[760px]:grid-cols-[minmax(0,1fr)]">
+      <div className="relative min-h-0 flex-1">
         {mobileNav ? (
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-primary/50 min-[761px]:hidden"
+            className="fixed inset-0 z-40 bg-foreground/40 md:hidden"
             aria-label="Close conversation list"
             onClick={() => setMobileNav(false)}
           />
         ) : null}
-        <div
-          className={`${
-            mobileNav ? "block" : "hidden"
-          } min-[761px]:block max-[760px]:fixed max-[760px]:bottom-0 max-[760px]:left-0 max-[760px]:top-0 max-[760px]:z-50 max-[760px]:w-[min(300px,85vw)] max-[760px]:border-r max-[760px]:border-primary`}
+        <aside
+          className={[
+            "fixed bottom-0 left-0 top-16 z-50 flex w-[min(320px,85vw)] flex-col border-r border-border bg-muted transition-transform md:z-20 md:w-[260px] md:translate-x-0",
+            mobileNav ? "translate-x-0" : "-translate-x-full",
+          ].join(" ")}
         >
           <Sidebar onSelect={select} onCreated={(id) => select(id)} />
-        </div>
+        </aside>
 
         <main
           data-chat-column
-          className="relative flex min-w-0 flex-col border-r border-primary bg-surface"
+          className="relative flex min-w-0 flex-1 flex-col border-r border-border bg-muted md:ml-[260px] lg:border-r-0 lg:mr-[300px]"
         >
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-primary px-6 py-4">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-4">
             <div className="min-w-0">
-              <p className="label">Conversation</p>
-              <h2 className="truncate font-display text-2xl font-bold tracking-tight" title={title}>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Conversation
+              </p>
+              <h2 className="truncate font-heading text-xl font-bold tracking-tight" title={title}>
                 {title}
               </h2>
             </div>
             {currentId !== null ? (
-              <a className="btn" href={exportUrl(currentId)} download>
-                Export
-              </a>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <a
+                      href={exportUrl(currentId)}
+                      download
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
+                    />
+                  }
+                >
+                  <HugeiconsIcon icon={DownloadIcon} strokeWidth={2} />
+                  Export
+                </TooltipTrigger>
+                <TooltipContent>Download this conversation as Markdown</TooltipContent>
+              </Tooltip>
             ) : null}
           </header>
           {view?.parentId ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-secondary px-6 py-2">
-              <span className="label text-secondary">Subagent conversation</span>
-              <Button variant="quiet" onClick={() => select(view.parentId as number)}>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/50 px-6 py-2">
+              <Badge variant="secondary">Subagent conversation</Badge>
+              <Button variant="ghost" size="sm" onClick={() => select(view.parentId as number)}>
+                <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
                 Back to parent
               </Button>
             </div>
@@ -296,7 +402,9 @@ export function App() {
           />
         </main>
 
-        <StatusPanel />
+        <aside className="fixed bottom-0 right-0 top-16 hidden w-[300px] lg:block">
+          <StatusPanel />
+        </aside>
       </div>
 
       <Drawer />

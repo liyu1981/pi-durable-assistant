@@ -45,7 +45,10 @@ export const managementAtom = atom<Management | null>(null);
 export const personalAtom = atom<PersonalData | null>(null);
 export const knowledgeResultsAtom = atom<KnowledgeHit[]>([]);
 export const knowledgePageAtom = atom<KnowledgePage | null>(null);
-export const drawerAtom = atom<{ open: boolean; panel: "tasks" | "personal" | "knowledge" }>({
+export const drawerAtom = atom<{
+  open: boolean;
+  panel: "tasks" | "personal" | "knowledge" | "status";
+}>({
   open: false,
   panel: "tasks",
 });

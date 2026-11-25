@@ -1,8 +1,16 @@
+import { ArchiveIcon, ArchiveRestoreIcon, PlusIcon, TrashIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtom } from "jotai/react";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { get, post } from "../api/client";
 import type { Conversation, ServerInfo } from "../api/types";
 import {
+  type ConversationFilter,
   conversationFilterAtom,
   conversationsAtom,
   currentConversationIdAtom,
@@ -12,7 +20,7 @@ import {
 } from "../atoms";
 import { formatListTime, formatTime } from "../lib/format";
 import { useToast } from "../lib/useToast";
-import { Button, EmptyState } from "./ui";
+import { ConfirmDialog, EmptyState } from "./ui";
 
 interface SidebarProps {
   onSelect: (id: number) => void;
@@ -99,115 +107,121 @@ export function Sidebar({ onSelect, onCreated }: SidebarProps) {
         : "Create a conversation to begin a durable session.";
 
   return (
-    <aside className="flex h-full w-full flex-col bg-surface" aria-label="Conversations">
-      <div className="border-b border-primary px-4 py-4">
+    <aside
+      className="flex h-full w-full flex-col border-r border-border bg-muted"
+      aria-label="Conversations"
+    >
+      <div className="shrink-0 border-b border-border px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="label">Workspace</p>
-            <h2 className="mt-1 font-display text-xl font-bold tracking-tight">Inbox</h2>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Workspace
+            </p>
+            <h2 className="mt-1 font-heading text-xl font-bold tracking-tight">Inbox</h2>
           </div>
-          <Button variant="primary" onClick={() => void create()}>
-            + New
+          <Button size="sm" onClick={() => void create()}>
+            <HugeiconsIcon icon={PlusIcon} strokeWidth={2} />
+            New
           </Button>
         </div>
-        <div className="mt-4 flex gap-2" role="tablist" aria-label="Conversation scope">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "active"}
-            className="tab"
-            onClick={() => {
-              setFilter("active");
-              setPendingRemove(null);
-            }}
-          >
-            Active ({activeCount})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "archived"}
-            className="tab"
-            onClick={() => {
-              setFilter("archived");
-              setPendingRemove(null);
-            }}
-          >
-            Archived ({archivedCount})
-          </button>
-        </div>
+        <Tabs
+          value={filter}
+          onValueChange={(value) => {
+            setFilter((value ?? "active") as ConversationFilter);
+            setPendingRemove(null);
+          }}
+          className="mt-4"
+        >
+          <TabsList className="w-full">
+            <TabsTrigger value="active">Active ({activeCount})</TabsTrigger>
+            <TabsTrigger value="archived">Archived ({archivedCount})</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      <nav className="scroll-area flex-1 px-2 py-3" aria-label="Conversations">
-        {visible.length === 0 ? (
-          <EmptyState title={emptyTitle} hint={emptyHint} />
-        ) : (
-          <ul className="flex flex-col">
-            {visible.map((item) => {
+      <ScrollArea className="min-h-0 flex-1">
+        <nav className="flex flex-col gap-2 px-2 py-3" aria-label="Conversations">
+          {visible.length === 0 ? (
+            <EmptyState title={emptyTitle} hint={emptyHint} />
+          ) : (
+            visible.map((item) => {
               const isCurrent = item.id === currentId;
-              const confirming = pendingRemove === item.id;
               const stamp =
                 filter === "archived" ? (item.archivedAt ?? item.createdAt) : item.createdAt;
               return (
-                <li
+                <Card
                   key={item.id}
-                  className={`border-b border-l-4 border-primary/15 px-2 py-3 ${
-                    isCurrent ? "border-l-secondary bg-primary/5" : "border-l-transparent"
-                  }`}
+                  size="sm"
+                  className={`gap-2 py-3 ${isCurrent ? "ring-1 ring-primary" : ""}`}
                 >
-                  <button
-                    type="button"
-                    className="flex w-full items-baseline justify-between gap-3 text-left"
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <span className="truncate font-semibold" title={item.title}>
-                      {item.forkOf ? <span className="label mr-1 text-secondary">Fork</span> : null}
-                      {item.title || "Untitled conversation"}
-                    </span>
-                    <span className="label shrink-0 text-primary/70" title={formatTime(stamp)}>
-                      {formatListTime(stamp)}
-                    </span>
-                  </button>
-                  {confirming ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="label text-primary/70">Removed from the list only.</span>
-                      <Button variant="quiet" onClick={() => setPendingRemove(null)}>
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="danger"
-                        disabled={busyId !== null}
-                        onClick={() => void shelf(item.id, "remove")}
+                  <CardContent className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="flex w-full items-baseline justify-between gap-3 text-left"
+                      onClick={() => onSelect(item.id)}
+                    >
+                      <span className="truncate text-sm font-medium" title={item.title}>
+                        {item.forkOf ? (
+                          <Badge variant="secondary" className="mr-1">
+                            Fork
+                          </Badge>
+                        ) : null}
+                        {item.title || "Untitled conversation"}
+                      </span>
+                      <span
+                        className="shrink-0 text-xs text-muted-foreground"
+                        title={formatTime(stamp)}
                       >
-                        Remove
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                        {formatListTime(stamp)}
+                      </span>
+                    </button>
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        variant="quiet"
+                        variant="ghost"
+                        size="xs"
                         disabled={busyId !== null}
                         onClick={() =>
                           void shelf(item.id, filter === "archived" ? "restore" : "archive")
                         }
                       >
+                        <HugeiconsIcon
+                          icon={filter === "archived" ? ArchiveRestoreIcon : ArchiveIcon}
+                          strokeWidth={2}
+                        />
                         {filter === "archived" ? "Restore" : "Archive"}
                       </Button>
                       <Button
-                        variant="quiet"
+                        variant="ghost"
+                        size="xs"
+                        className="text-destructive"
                         disabled={busyId !== null}
                         onClick={() => setPendingRemove(item.id)}
                       >
+                        <HugeiconsIcon icon={TrashIcon} strokeWidth={2} />
                         Remove
                       </Button>
                     </div>
-                  )}
-                </li>
+                  </CardContent>
+                </Card>
               );
-            })}
-          </ul>
-        )}
-      </nav>
+            })
+          )}
+        </nav>
+      </ScrollArea>
+
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemove(null);
+        }}
+        title="Remove conversation?"
+        description="This removes the conversation from the list only. The stored session stays on disk."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (pendingRemove !== null) void shelf(pendingRemove, "remove");
+        }}
+      />
     </aside>
   );
 }

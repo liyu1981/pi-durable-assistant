@@ -1,13 +1,10 @@
-import { useSetAtom } from "jotai/react";
 import { useCallback } from "react";
-import { type Toast, toastsAtom } from "../atoms";
+import { toast } from "sonner";
+import type { Toast } from "../atoms";
 
+/** Stable bridge from the app's toast kinds to the Sonner toaster. */
 export function useToast() {
-  const setToasts = useSetAtom(toastsAtom);
-  return useCallback(
-    (message: string, kind: Toast["kind"] = "info") => {
-      setToasts((previous) => [...previous, { id: Date.now() + Math.random(), message, kind }]);
-    },
-    [setToasts],
-  );
+  return useCallback((message: string, kind: Toast["kind"] = "info") => {
+    toast[kind](message);
+  }, []);
 }

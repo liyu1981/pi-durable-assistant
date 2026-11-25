@@ -1,10 +1,17 @@
+import { ArrowRight01Icon, BookOpen01Icon, SearchIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtom } from "jotai/react";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { get } from "../api/client";
 import type { KnowledgePage, KnowledgeSearchResult, PersonalData } from "../api/types";
 import { knowledgePageAtom, knowledgeResultsAtom, personalAtom } from "../atoms";
 import { useToast } from "../lib/useToast";
-import { Badge, Button, CheckboxField, Field, SectionTitle } from "./ui";
+import { Field, SwitchField } from "./ui";
 
 export function KnowledgePanel() {
   const [results, setResults] = useAtom(knowledgeResultsAtom);
@@ -62,85 +69,109 @@ export function KnowledgePanel() {
   const knowledge = personal?.knowledge;
 
   return (
-    <>
-      <section>
-        <SectionTitle>Knowledge search</SectionTitle>
-        <p className="text-sm text-primary/70">
-          {knowledge?.enabled
-            ? `Read-only scope: ${(knowledge.allow ?? []).join(", ") || "all paths"}`
-            : `Knowledge base unavailable: ${knowledge?.reason ?? "not configured"}`}
-        </p>
-        <form
-          className="mt-3 flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void search();
-          }}
-        >
-          <Field label="Search term (1-200 characters)">
-            <input
-              className="field"
-              name="q"
-              maxLength={200}
-              required
-              value={query}
-              placeholder="Enter keywords"
-              onChange={(event) => setQuery(event.target.value)}
+    <div className="flex flex-col gap-6">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HugeiconsIcon icon={SearchIcon} strokeWidth={2} />
+            Knowledge search
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void search();
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              {knowledge?.enabled
+                ? `Read-only scope: ${(knowledge.allow ?? []).join(", ") || "all paths"}`
+                : `Knowledge base unavailable: ${knowledge?.reason ?? "not configured"}`}
+            </p>
+            <Field label="Search term (1-200 characters)">
+              <Input
+                name="q"
+                maxLength={200}
+                required
+                value={query}
+                placeholder="Enter keywords"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </Field>
+            <SwitchField
+              label="Include archived notes"
+              checked={history}
+              onCheckedChange={setHistory}
             />
-          </Field>
-          <CheckboxField label="Include archived notes" checked={history} onChange={setHistory} />
-          <Button type="submit" variant="primary" disabled={busy || !query.trim()}>
-            {busy ? "Working..." : "Search"}
-          </Button>
-        </form>
-      </section>
+            <Button type="submit" disabled={busy || !query.trim()}>
+              <HugeiconsIcon icon={SearchIcon} strokeWidth={2} />
+              {busy ? "Working..." : "Search"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-      <section>
-        <SectionTitle>Results</SectionTitle>
-        {results.length === 0 ? (
-          <p className="text-sm text-primary/70">Enter a keyword to start searching.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {results.map((hit) => (
-              <li key={`${hit.path}-${hit.line}`}>
-                <button
-                  type="button"
-                  className="w-full rounded-sm border border-primary/20 px-3 py-2 text-left hover:border-secondary"
-                  onClick={() => void readPage(hit.path, hit.line)}
-                >
-                  <span className="label flex flex-wrap items-center gap-2 text-primary/70">
-                    {hit.path}:{hit.line === hit.endLine ? hit.line : `${hit.line}-${hit.endLine}`}
-                    <Badge tone="neutral">{hit.status}</Badge>
-                  </span>
-                  <span className="mt-2 block whitespace-pre-wrap break-words text-xs">
-                    {hit.excerpt}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Results</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {results.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Enter a keyword to start searching.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {results.map((hit) => (
+                <li key={`${hit.path}-${hit.line}`}>
+                  <Button
+                    variant="outline"
+                    className="h-auto w-full justify-start whitespace-normal py-3 text-left"
+                    onClick={() => void readPage(hit.path, hit.line)}
+                  >
+                    <span className="flex w-full flex-col gap-2">
+                      <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {hit.path}:
+                        {hit.line === hit.endLine ? hit.line : `${hit.line}-${hit.endLine}`}
+                        <Badge variant="outline">{hit.status}</Badge>
+                      </span>
+                      <span className="whitespace-pre-wrap break-words text-xs">{hit.excerpt}</span>
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {page ? (
-        <section>
-          <SectionTitle>Note content</SectionTitle>
-          <p className="label text-primary/70">
-            {page.path}:{page.startLine}-{page.endLine} [{page.status}] {page.revision}
-            {page.truncated ? " (truncated)" : ""}
-          </p>
-          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words border-l-2 border-secondary pl-3 text-xs">
-            {page.text}
-          </pre>
-          <Button
-            className="mt-3"
-            variant="quiet"
-            onClick={() => void readPage(page.path, page.endLine + 1)}
-          >
-            Read next section
-          </Button>
-        </section>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
+              Note content
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              {page.path}:{page.startLine}-{page.endLine} [{page.status}] {page.revision}
+              {page.truncated ? " (truncated)" : ""}
+            </p>
+            <ScrollArea className="h-64 rounded-xl border border-border bg-muted/30 p-3">
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs">{page.text}</pre>
+            </ScrollArea>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void readPage(page.path, page.endLine + 1)}
+            >
+              Read next section
+              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
-    </>
+    </div>
   );
 }

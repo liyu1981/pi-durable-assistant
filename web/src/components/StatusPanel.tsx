@@ -1,11 +1,30 @@
+import {
+  ActivityIcon,
+  BookOpen01Icon,
+  BrainIcon,
+  Calendar01Icon,
+  Clock01Icon,
+  NotebookIcon,
+  ServerIcon,
+  SettingsIcon,
+  StickyNoteIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { post } from "../api/client";
 import type { TaskView } from "../api/types";
 import { drawerAtom, serverInfoAtom, sseStatusAtom, viewAtom } from "../atoms";
 import { extractLiveInfo, formatDuration, formatTime, usageNumbers } from "../lib/format";
 import { useToast } from "../lib/useToast";
-import { Badge, Button, SectionTitle, StatusMessage } from "./ui";
+import { ConfirmDialog, StatusMessage, toneVariant } from "./ui";
 
 const TASK_KINDS: Record<string, string> = {
   "pi.generation": "Model call",
@@ -30,7 +49,7 @@ function taskTone(status: string): "accent" | "warning" | "danger" | "success" {
 
 function TaskTree({ tasks }: { tasks: TaskView[] }) {
   if (tasks.length === 0) {
-    return <p className="text-sm text-primary/70">Idle. No active tasks.</p>;
+    return <p className="text-sm text-muted-foreground">Idle. No active tasks.</p>;
   }
   const ids = new Set(tasks.map((task) => task.id));
   const children = new Map<string, TaskView[]>();
@@ -52,23 +71,25 @@ function TaskTree({ tasks }: { tasks: TaskView[] }) {
   for (const root of roots) walk(root, 0);
   const indent = ["pl-0", "pl-3", "pl-6"];
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col text-sm">
       {rows.map(({ task, depth }) => (
         <li
           key={task.id}
-          className={`flex items-center justify-between gap-2 border-b border-primary/15 py-1 text-sm ${indent[Math.min(depth, 2)]}`}
+          className={`flex items-center justify-between gap-2 border-b border-border py-1 ${indent[Math.min(depth, 2)]}`}
         >
           <span className="truncate" title={task.id}>
             {TASK_KINDS[task.kind] ?? task.kind}
           </span>
-          <Badge tone={taskTone(task.status)}>{TASK_STATUSES[task.status] ?? task.status}</Badge>
+          <Badge variant={toneVariant(taskTone(task.status))}>
+            {TASK_STATUSES[task.status] ?? task.status}
+          </Badge>
         </li>
       ))}
     </ul>
   );
 }
 
-export function StatusPanel() {
+export function StatusPanel({ className }: { className?: string }) {
   const view = useAtomValue(viewAtom);
   const serverInfo = useAtomValue(serverInfoAtom);
   const sseStatus = useAtomValue(sseStatusAtom);
@@ -101,176 +122,251 @@ export function StatusPanel() {
     }
   };
 
+  const connectionVariant =
+    sseStatus === "open" ? "default" : sseStatus === "reconnecting" ? "secondary" : "outline";
+
   return (
     <aside
-      className="scroll-area hidden w-[300px] shrink-0 border-l border-primary bg-surface px-4 py-6 min-[1101px]:block"
+      className={cn(
+        "h-full w-[300px] shrink-0 overflow-y-auto border-l border-border bg-muted px-4 py-6",
+        className,
+      )}
       aria-label="Status and notes"
     >
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="label">Pi Durable</p>
-          <h2 className="font-display text-lg font-bold tracking-tight">Session status</h2>
-        </div>
-        <Badge tone={sseStatus === "open" ? "success" : "warning"}>
-          {sseStatus === "open"
-            ? "Connected"
-            : sseStatus === "reconnecting"
-              ? "Reconnecting"
-              : "Connecting"}
-        </Badge>
-      </div>
-      <StatusMessage>
-        {live.runningTools.length > 0
-          ? "Tools running"
-          : usage.total > 0
-            ? "Usage recorded"
-            : "Idle"}
-      </StatusMessage>
+      <div className="flex flex-col gap-4">
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
+              Session status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Badge variant={connectionVariant} className="w-fit">
+              {sseStatus === "open"
+                ? "Connected"
+                : sseStatus === "reconnecting"
+                  ? "Reconnecting"
+                  : "Connecting"}
+            </Badge>
+            <StatusMessage>
+              {live.runningTools.length > 0
+                ? "Tools running"
+                : usage.total > 0
+                  ? "Usage recorded"
+                  : "Idle"}
+            </StatusMessage>
+          </CardContent>
+        </Card>
 
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Notebook</SectionTitle>
-        <p className="label text-primary/70">To-dos</p>
-        {todos.length > 0 ? (
-          <ul className="mt-2">
-            {todos.map((todo) => (
-              <li
-                key={todo.text}
-                className="flex items-baseline gap-2 border-b border-primary/15 py-1 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={todo.done}
-                  disabled
-                  aria-label={todo.text}
-                  readOnly
-                />
-                <span className={todo.done ? "text-primary/70 line-through" : ""}>{todo.text}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-primary/70">No to-dos yet.</p>
-        )}
-        <p className="label mt-4 text-primary/70">Memos</p>
-        {memos.length > 0 ? (
-          <ul className="mt-2">
-            {memos.map((memo) => {
-              const text = typeof memo === "string" ? memo : memo.text;
-              return (
-                <li key={text} className="border-l-2 border-secondary py-1 pl-2 text-sm">
-                  {text}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-primary/70">No memos yet.</p>
-        )}
-      </div>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={NotebookIcon} strokeWidth={2} />
+              Notebook
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              To-dos
+            </p>
+            {todos.length > 0 ? (
+              <ul>
+                {todos.map((todo) => (
+                  <li key={todo.text} className="flex items-center gap-2 py-1 text-sm">
+                    <Switch
+                      size="sm"
+                      checked={todo.done}
+                      disabled
+                      onCheckedChange={() => {}}
+                      aria-label={todo.text}
+                    />
+                    <Label className={`font-normal ${todo.done ? textClassDone : ""}`}>
+                      {todo.text}
+                    </Label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No to-dos yet.</p>
+            )}
+            <Separator className="my-2" />
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Memos
+            </p>
+            {memos.length > 0 ? (
+              <ul>
+                {memos.map((memo) => {
+                  const text = typeof memo === "string" ? memo : memo.text;
+                  return (
+                    <li key={text} className="border-l-2 border-primary/60 py-1 pl-2 text-sm">
+                      {text}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No memos yet.</p>
+            )}
+          </CardContent>
+        </Card>
 
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Reminders</SectionTitle>
-        {reminders.length > 0 ? (
-          <ul className="flex flex-col">
-            {reminders.map((reminder) => (
-              <li
-                key={reminder.id}
-                className="flex items-center justify-between gap-2 border-b border-primary/15 py-1 text-sm"
-              >
-                <span className="truncate" title={formatTime(reminder.at)}>
-                  {reminder.text}
-                </span>
-                <Badge tone={reminder.status === "scheduled" ? "warning" : "success"}>
-                  {reminder.status === "scheduled"
-                    ? reminder.at > now
-                      ? formatDuration(reminder.at - now)
-                      : "Due"
-                    : "Sent"}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-primary/70">No reminders yet.</p>
-        )}
-      </div>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={Clock01Icon} strokeWidth={2} />
+              Reminders
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {reminders.length > 0 ? (
+              <ul className="flex flex-col text-sm">
+                {reminders.map((reminder) => (
+                  <li
+                    key={reminder.id}
+                    className="flex items-center justify-between gap-2 border-b border-border py-1"
+                  >
+                    <span className="truncate" title={formatTime(reminder.at)}>
+                      {reminder.text}
+                    </span>
+                    <Badge variant={reminder.status === "scheduled" ? "secondary" : "default"}>
+                      {reminder.status === "scheduled"
+                        ? reminder.at > now
+                          ? formatDuration(reminder.at - now)
+                          : "Due"
+                        : "Sent"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No reminders yet.</p>
+            )}
+          </CardContent>
+        </Card>
 
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Durable tasks</SectionTitle>
-        <TaskTree tasks={view?.tasks ?? []} />
-      </div>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={Calendar01Icon} strokeWidth={2} />
+              Durable tasks
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TaskTree tasks={view?.tasks ?? []} />
+          </CardContent>
+        </Card>
 
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Runtime</SectionTitle>
-        <dl className="flex flex-col text-sm">
-          <div className="flex justify-between gap-2 border-b border-primary/15 py-1">
-            <dt className="label text-primary/70">Boots</dt>
-            <dd>{serverInfo?.boots ?? "-"}</dd>
-          </div>
-          <div className="flex justify-between gap-2 border-b border-primary/15 py-1">
-            <dt className="label text-primary/70">PID</dt>
-            <dd>{serverInfo?.pid ?? "-"}</dd>
-          </div>
-          <div className="flex justify-between gap-2 border-b border-primary/15 py-1">
-            <dt className="label text-primary/70">Started</dt>
-            <dd>{formatTime(serverInfo?.startedAt)}</dd>
-          </div>
-          <div className="flex justify-between gap-2 border-b border-primary/15 py-1">
-            <dt className="label text-primary/70">Model</dt>
-            <dd className="truncate" title={serverInfo?.model}>
-              {serverInfo?.model || serverInfo?.api || "-"}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-2 border-b border-primary/15 py-1">
-            <dt className="label text-primary/70">Tokens</dt>
-            <dd>
-              in {usage.input} / out {usage.output}
-            </dd>
-          </div>
-        </dl>
-        <div className="mt-2 h-1 bg-primary/10" aria-hidden="true">
-          <div
-            className="h-full bg-secondary"
-            style={{ width: `${usage.total ? Math.round((usage.input / usage.total) * 100) : 0}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Management</SectionTitle>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "tasks" })}>
-            Task center
-          </Button>
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "personal" })}>
-            Memory &amp; skills
-          </Button>
-          <Button variant="quiet" onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
-            Knowledge
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-6 border-t border-primary pt-4">
-        <SectionTitle>Demo</SectionTitle>
-        {confirmCrash ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-primary/70">The supervisor restarts the exited process.</p>
-            <div className="flex gap-2">
-              <Button variant="danger" onClick={() => void crash()}>
-                Confirm
-              </Button>
-              <Button variant="quiet" onClick={() => setConfirmCrash(false)}>
-                Cancel
-              </Button>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={ServerIcon} strokeWidth={2} />
+              Runtime
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <dl className="flex flex-col text-sm">
+              <RuntimeRow label="Boots" value={serverInfo?.boots ?? "-"} />
+              <RuntimeRow label="PID" value={serverInfo?.pid ?? "-"} />
+              <RuntimeRow label="Started" value={formatTime(serverInfo?.startedAt)} />
+              <RuntimeRow
+                label="Model"
+                value={serverInfo?.model || serverInfo?.api || "-"}
+                truncate
+              />
+              <RuntimeRow label="Tokens" value={`in ${usage.input} / out ${usage.output}`} />
+            </dl>
+            <div className="h-1 bg-muted" aria-hidden="true">
+              <div
+                className="h-full bg-primary"
+                style={{
+                  width: `${usage.total ? Math.round((usage.input / usage.total) * 100) : 0}%`,
+                }}
+              />
             </div>
-          </div>
-        ) : (
-          <Button variant="danger" onClick={() => setConfirmCrash(true)}>
-            Simulate crash
-          </Button>
-        )}
+          </CardContent>
+        </Card>
+
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
+              Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrawer({ open: true, panel: "tasks" })}
+            >
+              <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
+              Task center
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrawer({ open: true, panel: "personal" })}
+            >
+              <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
+              Memory &amp; skills
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrawer({ open: true, panel: "knowledge" })}
+            >
+              <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
+              Knowledge
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={StickyNoteIcon} strokeWidth={2} />
+              Demo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button variant="destructive" size="sm" onClick={() => setConfirmCrash(true)}>
+              Simulate crash
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmCrash}
+        onOpenChange={setConfirmCrash}
+        title="Simulate a crash?"
+        description="The supervisor restarts the exited process. This is a demo action."
+        confirmLabel="Simulate crash"
+        destructive
+        onConfirm={() => void crash()}
+      />
     </aside>
+  );
+}
+
+const textClassDone = "line-through text-muted-foreground";
+
+function RuntimeRow({
+  label,
+  value,
+  truncate = false,
+}: {
+  label: string;
+  value: string | number;
+  truncate?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-2 border-b border-border py-1">
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={truncate ? "truncate" : ""} title={String(value)}>
+        {value}
+      </dd>
+    </div>
   );
 }

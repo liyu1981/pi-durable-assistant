@@ -7,7 +7,7 @@ A self-hosted, single-user durable AI assistant: one static Go binary with an em
 ## Tech stack
 
 - Go 1.26 / toolchain 1.27.4, `github.com/MichaelKinsy/PiG` v0.7.0 (`durable`, `durable/harness`, `ai`, pure-Go SQLite)
-- React 19, TypeScript 7, Vite 8, Tailwind CSS 4, Jotai 3, Biome 2, installed with pnpm; compiled into `web/dist` and embedded with `go:embed`
+- React 19, TypeScript 7, Vite 8, Tailwind CSS 4, shadcn/ui with the Luma preset (`b2D0wqNxT`), Jotai 3, Biome 2, installed with pnpm; compiled into `web/dist` and embedded with `go:embed`
 - Multi-stage Docker build; no Node.js required at runtime
 - All build targets live in `package.json` (`pnpm <script>`); there is no Makefile
 
@@ -15,12 +15,15 @@ A self-hosted, single-user durable AI assistant: one static Go binary with an em
 
 ```bash
 pnpm install
-pnpm dev:demo       # faux provider on :18789, app on 0.0.0.0:3111
+pnpm dev:install    # one-time: install air (Go live-reload)
+pnpm dev            # watch + rebuild; app on 0.0.0.0:3111
 ```
 
 In development the server always binds `0.0.0.0:3111`. Open http://localhost:3111.
 
-The deterministic local script (add todos, wait 10 seconds, complete todos, final answer) is served by `cmd/faux-llm`, a development-only process outside the main binary. To run only the app in dev mode, use `pnpm dev` with the faux server already running.
+`pnpm dev` starts the dev-only faux provider and `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server.
+
+The deterministic local script (add todos, wait 10 seconds, complete todos, final answer) is served by `cmd/faux-llm`, a development-only process outside the main binary. Use `pnpm dev:faux` if you only need the provider.
 
 ## Connect a real model
 

@@ -10,7 +10,13 @@ function renderUrls(text: string, base: string): ReactNode[] {
     const at = match.index ?? 0;
     if (at > last) nodes.push(text.slice(last, at));
     nodes.push(
-      <a key={`${base}-url-${at}`} href={match[0]} target="_blank" rel="noopener noreferrer">
+      <a
+        key={`${base}-url-${at}`}
+        href={match[0]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2"
+      >
         {match[0]}
       </a>,
     );
@@ -28,14 +34,28 @@ function renderInline(text: string, base: string): ReactNode[] {
     if (at > last) nodes.push(...renderUrls(text.slice(last, at), `${base}-plain-${at}`));
     const token = match[0];
     if (token.startsWith("`")) {
-      nodes.push(<code key={`${base}-code-${at}`}>{token.slice(1, -1)}</code>);
+      nodes.push(
+        <code key={`${base}-code-${at}`} className="rounded bg-muted px-1 py-0.5 font-mono text-sm">
+          {token.slice(1, -1)}
+        </code>,
+      );
     } else if (token.startsWith("**")) {
-      nodes.push(<strong key={`${base}-bold-${at}`}>{token.slice(2, -2)}</strong>);
+      nodes.push(
+        <strong key={`${base}-bold-${at}`} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>,
+      );
     } else {
       const link = /^\[([^\]]+)\]\((https?:\/\/\S+)\)$/.exec(token);
       if (link) {
         nodes.push(
-          <a key={`${base}-link-${at}`} href={link[2]} target="_blank" rel="noopener noreferrer">
+          <a
+            key={`${base}-link-${at}`}
+            href={link[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2"
+          >
             {link[1]}
           </a>,
         );
@@ -69,7 +89,7 @@ export function Markdown({ text }: { text: string }) {
     const content = [...paragraph];
     paragraph.length = 0;
     blocks.push(
-      <p key={`p-${index}`}>
+      <p key={`p-${index}`} className="text-sm leading-6 text-foreground">
         {content.map((line, offset) => {
           const lineKey = keyFor("line");
           return (
@@ -94,8 +114,11 @@ export function Markdown({ text }: { text: string }) {
         index += 1;
       }
       blocks.push(
-        <pre key={`code-${index}`}>
-          <code>{code.join("\n")}</code>
+        <pre
+          key={`code-${index}`}
+          className="overflow-x-auto rounded-xl border border-border bg-muted/50 p-3 text-sm"
+        >
+          <code className="font-mono">{code.join("\n")}</code>
         </pre>,
       );
     } else if (!line.trim()) {
@@ -106,7 +129,11 @@ export function Markdown({ text }: { text: string }) {
         flush();
         const level = Math.min(6, heading[1].length + 2);
         const Heading = `h${level}` as "h3" | "h4" | "h5" | "h6";
-        blocks.push(<Heading key={`h-${index}`}>{renderInline(heading[2], `h-${index}`)}</Heading>);
+        blocks.push(
+          <Heading key={`h-${index}`} className="text-sm font-semibold text-foreground">
+            {renderInline(heading[2], `h-${index}`)}
+          </Heading>,
+        );
       } else if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
         flush();
         const ordered = /^\s*\d/.test(line);
@@ -120,7 +147,15 @@ export function Markdown({ text }: { text: string }) {
           return <li key={itemKey}>{renderInline(item, itemKey)}</li>;
         });
         blocks.push(
-          ordered ? <ol key={`list-${index}`}>{list}</ol> : <ul key={`list-${index}`}>{list}</ul>,
+          ordered ? (
+            <ol key={`list-${index}`} className="ml-5 list-decimal space-y-1 text-sm">
+              {list}
+            </ol>
+          ) : (
+            <ul key={`list-${index}`} className="ml-5 list-disc space-y-1 text-sm">
+              {list}
+            </ul>
+          ),
         );
         continue;
       } else {

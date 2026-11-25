@@ -1,11 +1,25 @@
+import {
+  Alert02Icon,
+  ArrowUpRightIcon,
+  GitForkIcon,
+  Loading03Icon,
+  Message01Icon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { imageUrl } from "../api/client";
 import type { LiveToolSlot, ToolCallView, ToolEntry, ViewEntry, ViewPayload } from "../api/types";
 import { busyAtom, currentConversationIdAtom, draftAtom, sseStatusAtom, viewAtom } from "../atoms";
 import { extractLiveInfo, formatFileSize, formatToolArgs, usageNumbers } from "../lib/format";
 import { Markdown } from "./Markdown";
-import { Badge, EmptyState, LoadingState } from "./ui";
+import { EmptyState, LoadingState, toneVariant } from "./ui";
 
 interface ChatThreadProps {
   onFork: (entryId: number) => void;
@@ -55,17 +69,22 @@ function SystemNotice({
   tone?: "warning" | "danger" | "accent";
   children: string;
 }) {
-  const edge =
-    tone === "danger"
-      ? "border-l-danger"
-      : tone === "accent"
-        ? "border-l-secondary"
-        : "border-l-warning";
+  if (tone === "danger") {
+    return (
+      <Alert variant="destructive" className="gap-1 py-2">
+        <AlertTitle className="text-xs uppercase tracking-wide">{label}</AlertTitle>
+        <AlertDescription className="text-sm text-foreground">{children}</AlertDescription>
+      </Alert>
+    );
+  }
   return (
-    <div className={`border-l-4 py-1 pl-4 ${edge}`}>
-      <p className="label text-primary/70">{label}</p>
-      <p className="mt-1 break-words text-sm">{children}</p>
-    </div>
+    <Alert className="gap-1 border-l-2 border-l-primary py-2">
+      <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+      <AlertTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </AlertTitle>
+      <AlertDescription className="text-sm text-foreground">{children}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -90,35 +109,35 @@ function ToolCard({
   const runningOutput = running?.output?.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? "";
   const displayName = name === "delegate" ? "Subagent" : name || "Tool call";
   return (
-    <div
-      className={`rounded-sm border px-3 py-2 ${isError ? "border-danger" : "border-primary/20"}`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="label font-bold">{displayName}</span>
-        <Badge tone={isError ? "danger" : result ? "success" : "warning"}>
-          {isError ? "Failed" : result ? "Done" : "Running"}
-        </Badge>
-      </div>
-      {args !== undefined ? (
-        <p className="mt-2 text-xs text-primary/70">Arguments: {formatToolArgs(args)}</p>
-      ) : null}
-      {childId !== undefined ? (
-        <ButtonLink onClick={() => onSelectConversation(childId)}>
-          Open subagent conversation
-        </ButtonLink>
-      ) : null}
-      <p className="mt-2 whitespace-pre-wrap break-words text-sm">
-        {result ? preview || (isError ? "Tool failed" : "Done") : runningOutput || "Running..."}
-      </p>
-    </div>
-  );
-}
-
-function ButtonLink({ onClick, children }: { onClick: () => void; children: string }) {
-  return (
-    <button type="button" className="btn btn-quiet mt-2" onClick={onClick}>
-      {children} <span aria-hidden="true">-&gt;</span>
-    </button>
+    <Card size="sm" className={`gap-2 ${isError ? "ring-1 ring-destructive/40" : ""}`}>
+      <CardHeader className="gap-1">
+        <CardTitle className="text-sm">{displayName}</CardTitle>
+        <CardAction>
+          <Badge variant={toneVariant(isError ? "danger" : result ? "success" : "warning")}>
+            {isError ? "Failed" : result ? "Done" : "Running"}
+          </Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm">
+        {args !== undefined ? (
+          <p className="text-xs text-muted-foreground">Arguments: {formatToolArgs(args)}</p>
+        ) : null}
+        {childId !== undefined ? (
+          <Button
+            variant="link"
+            size="xs"
+            className="h-auto justify-start px-0"
+            onClick={() => onSelectConversation(childId)}
+          >
+            Open subagent conversation
+            <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} />
+          </Button>
+        ) : null}
+        <p className="whitespace-pre-wrap break-words">
+          {result ? preview || (isError ? "Tool failed" : "Done") : runningOutput || "Running..."}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -141,19 +160,32 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
   const sseStatus = useAtomValue(sseStatusAtom);
   const currentId = useAtomValue(currentConversationIdAtom);
   const setDraft = useSetAtom(draftAtom);
-  const scrollRef = useRef<HTMLElement | null>(null);
+  const scrollHostRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
 
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (view && element && nearBottom.current) element.scrollTop = element.scrollHeight;
-  }, [view]);
+  const getViewport = useCallback(
+    () =>
+      scrollHostRef.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') ??
+      null,
+    [],
+  );
 
-  const onScroll = () => {
-    const element = scrollRef.current;
-    if (element)
-      nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-  };
+  useEffect(() => {
+    const viewport = getViewport();
+    if (!viewport) return;
+    const onScroll = () => {
+      nearBottom.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+    };
+    viewport.addEventListener("scroll", onScroll);
+    return () => viewport.removeEventListener("scroll", onScroll);
+  }, [getViewport]);
+
+  useEffect(() => {
+    if (view && nearBottom.current) {
+      const viewport = getViewport();
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    }
+  }, [view, getViewport]);
 
   const entries = view?.entries ?? [];
   const results = new Map<string, ToolEntry>();
@@ -213,37 +245,34 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
                         src={url}
                         alt={attachment.name}
                         loading="lazy"
-                        className="max-h-44 max-w-60 rounded-sm border border-primary/20 object-contain"
+                        className="max-h-44 max-w-60 rounded-xl border border-border object-contain"
                       />
                     </a>
                   );
                 }
                 return (
-                  <span
-                    key={attachment.name}
-                    className="label inline-flex items-center gap-2 rounded-sm border border-primary/20 px-2 py-1"
-                    title={attachment.name}
-                  >
-                    <span className="text-secondary">File</span>
+                  <Badge key={attachment.name} variant="outline" title={attachment.name}>
+                    <HugeiconsIcon icon={Message01Icon} strokeWidth={2} />
                     {attachment.name} - {formatFileSize(attachment.size)}
-                  </span>
+                  </Badge>
                 );
               })}
             </div>
           ) : null}
           {entry.text.trim() ? (
-            <div className="whitespace-pre-wrap break-words rounded-md bg-primary px-4 py-3 text-surface">
+            <div className="whitespace-pre-wrap break-words rounded-2xl bg-primary px-4 py-3 text-sm text-primary-foreground">
               {entry.text}
             </div>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-quiet"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => onFork(entry.id)}
             title="Fork a new conversation from this message"
           >
+            <HugeiconsIcon icon={GitForkIcon} strokeWidth={2} />
             Fork here
-          </button>
+          </Button>
         </div>
       );
     }
@@ -261,7 +290,7 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
       return (
         <div key={entry.id} className="flex flex-col gap-3">
           {entry.text.trim() ? (
-            <div className="prose-min border-l-2 border-secondary pl-4">
+            <div className="border-l-2 border-primary/60 pl-4">
               <Markdown text={entry.text} />
             </div>
           ) : null}
@@ -316,93 +345,100 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
   const showLoading = view === null && sseStatus !== "closed";
 
   return (
-    <section
-      className="scroll-area flex-1 px-6 py-8"
-      ref={scrollRef}
-      onScroll={onScroll}
-      aria-live="polite"
-      aria-label="Conversation thread"
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        {showLoading ? (
-          <LoadingState label="Connecting to conversation" />
-        ) : !entryHasContent(view) && !busy ? (
-          <EmptyState
-            title="Start a durable conversation"
-            hint="Sessions survive restarts and can schedule reminders or delegate subagents. Select a prompt to fill the composer:"
-          >
-            <div className="grid gap-2 text-left sm:grid-cols-2">
-              {EXAMPLES.map((example) => (
-                <button
-                  type="button"
-                  key={example}
-                  className="rounded-sm border border-primary/20 px-3 py-3 text-left text-sm hover:border-secondary"
-                  onClick={() => setDraft(example)}
-                >
-                  {example}
-                  <span className="label mt-2 block text-primary/70">Use this prompt</span>
-                </button>
-              ))}
-            </div>
-          </EmptyState>
-        ) : (
-          rendered
-        )}
+    <section aria-label="Conversation thread" aria-live="polite" className="min-h-0 flex-1">
+      <div ref={scrollHostRef} className="h-full min-h-0">
+        <ScrollArea className="h-full">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-8">
+            {showLoading ? (
+              <LoadingState label="Connecting to conversation" />
+            ) : !entryHasContent(view) && !busy ? (
+              <EmptyState
+                title="Start a durable conversation"
+                hint="Sessions survive restarts and can schedule reminders or delegate subagents. Select a prompt to fill the composer:"
+              >
+                <div className="grid gap-2 text-left sm:grid-cols-2">
+                  {EXAMPLES.map((example) => (
+                    <Button
+                      key={example}
+                      variant="outline"
+                      className="h-auto justify-start whitespace-normal py-3 text-left"
+                      onClick={() => setDraft(example)}
+                    >
+                      {example}
+                    </Button>
+                  ))}
+                </div>
+              </EmptyState>
+            ) : (
+              rendered
+            )}
 
-        {showLive ? (
-          <div className="flex flex-col gap-3 border-l-2 border-secondary pl-4">
-            {live.text ? (
-              <div className="prose-min">
-                <Markdown text={live.text} />
-                <span className="cursor" aria-hidden="true" />
+            {showLive ? (
+              <div className="flex flex-col gap-3 border-l-2 border-primary/60 pl-4">
+                <Badge variant="secondary" className="w-fit gap-1">
+                  <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="animate-spin" />
+                  Streaming
+                </Badge>
+                {live.text ? (
+                  <div>
+                    <Markdown text={live.text} />
+                    <span
+                      className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle"
+                      aria-hidden="true"
+                    />
+                  </div>
+                ) : live.thinking ? (
+                  <p className="text-sm text-muted-foreground">Thinking: {live.thinking}</p>
+                ) : view?.live?.generation ? (
+                  <p className="text-sm text-muted-foreground">
+                    <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="mr-1 inline" />
+                    Thinking
+                  </p>
+                ) : null}
+                {unrendered.map((slot) => (
+                  <ToolCard
+                    key={`live-${slot.callId ?? slot.name ?? "tool"}`}
+                    name={slot.name ?? "Tool call"}
+                    args={slot.args}
+                    running={slot}
+                    onSelectConversation={onSelectConversation}
+                  />
+                ))}
               </div>
-            ) : live.thinking ? (
-              <p className="text-sm text-primary/70">Thinking: {live.thinking}</p>
-            ) : view?.live?.generation ? (
-              <p className="text-sm text-primary/70">
-                Thinking
-                <span className="cursor" aria-hidden="true" />
-              </p>
             ) : null}
-            {unrendered.map((slot) => (
-              <ToolCard
-                key={`live-${slot.callId ?? slot.name ?? "tool"}`}
-                name={slot.name ?? "Tool call"}
-                args={slot.args}
-                running={slot}
-                onSelectConversation={onSelectConversation}
-              />
-            ))}
-          </div>
-        ) : null}
 
-        {tasks.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 border-t border-primary/20 pt-4">
-            <span className="label text-primary/70">Tasks</span>
-            {tasks.slice(0, 4).map((task) => (
-              <Badge key={task.id} tone={taskTone(task.status)}>
-                {TASK_KINDS[task.kind] ?? task.kind}: {TASK_STATUSES[task.status] ?? task.status}
-              </Badge>
-            ))}
-            {tasks.length > 4 ? (
-              <span className="label text-primary/70">+{tasks.length - 4} more</span>
+            {tasks.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Tasks
+                </span>
+                {tasks.slice(0, 4).map((task) => (
+                  <Badge key={task.id} variant={toneVariant(taskTone(task.status))}>
+                    {TASK_KINDS[task.kind] ?? task.kind}:{" "}
+                    {TASK_STATUSES[task.status] ?? task.status}
+                  </Badge>
+                ))}
+                {tasks.length > 4 ? (
+                  <span className="text-xs text-muted-foreground">+{tasks.length - 4} more</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {view && total > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                <span className="text-xs text-muted-foreground">
+                  Session tokens: in {input} / out {output}
+                </span>
+                <span className="h-1 max-w-40 flex-1 bg-muted" aria-hidden="true">
+                  <span
+                    className="block h-full bg-primary"
+                    style={{ width: `${Math.round((input / total) * 100)}%` }}
+                  />
+                </span>
+              </div>
             ) : null}
           </div>
-        ) : null}
-
-        {view && total > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 border-t border-primary/20 pt-4">
-            <span className="label text-primary/70">
-              Session tokens: in {input} / out {output}
-            </span>
-            <span className="h-1 max-w-40 flex-1 bg-primary/10" aria-hidden="true">
-              <span
-                className="block h-full bg-secondary"
-                style={{ width: `${Math.round((input / total) * 100)}%` }}
-              />
-            </span>
-          </div>
-        ) : null}
+        </ScrollArea>
       </div>
     </section>
   );

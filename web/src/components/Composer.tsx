@@ -1,5 +1,12 @@
+import { Cancel01Icon, PaperclipIcon, SendIcon, StopIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtom, useAtomValue } from "jotai/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { post, sendMessage } from "../api/client";
 import {
   attachmentsAtom,
@@ -13,7 +20,7 @@ import {
 } from "../atoms";
 import { makeKeyFactory, newRequestId } from "../lib/format";
 import { useToast } from "../lib/useToast";
-import { Button, CheckboxField } from "./ui";
+import { SwitchField } from "./ui";
 
 const TEXT_EXTENSIONS = new Set([
   "txt",
@@ -154,7 +161,7 @@ async function processFile(
         return { error: "This browser does not support image compression" };
       }
       const surface = getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-surface")
+        .getPropertyValue("--background")
         .trim();
       context.fillStyle = surface || "white";
       context.fillRect(0, 0, width, height);
@@ -371,39 +378,19 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   const canSend = (draft.trim().length > 0 || attachments.length > 0) && !sending;
 
   return (
-    <footer className="border-t border-primary bg-surface px-4 py-3">
+    <footer className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-muted px-4 py-3">
       {dragging ? (
         <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-surface/95 text-lg font-bold text-secondary"
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-background/95 text-lg font-semibold text-foreground"
           aria-hidden="true"
         >
-          <span className="rounded-md border-2 border-dashed border-secondary px-8 py-6">
+          <span className="rounded-2xl border-2 border-dashed border-primary px-8 py-6">
             Drop files here to attach (up to 5)
           </span>
         </div>
       ) : null}
 
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {busy ? (
-            <CheckboxField label="Steer" checked={steer} onChange={setSteer} />
-          ) : (
-            <span className="label text-primary/70">
-              Enter to send · Shift+Enter for a new line
-            </span>
-          )}
-          <div className="flex items-center gap-3">
-            {(view?.inbox ?? 0) > 0 ? (
-              <span className="label text-primary/70">Queued: {view?.inbox}</span>
-            ) : null}
-            {busy ? (
-              <Button variant="danger" onClick={() => void stop()}>
-                Stop
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
         {attachments.length > 0 ? (
           <ul className="flex flex-wrap gap-2" aria-label="Attachments">
             {attachments.map((attachment, index) => {
@@ -411,36 +398,40 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
               return (
                 <li
                   key={key}
-                  className="flex items-center gap-2 rounded-sm border border-primary/20 px-2 py-1"
+                  className="flex items-center gap-2 rounded-2xl border border-border bg-muted/50 px-2 py-1"
                 >
                   {attachment.previewUrl ? (
                     <img
                       src={attachment.previewUrl}
                       alt=""
-                      className="h-9 w-9 shrink-0 rounded-sm border border-primary/20 object-cover"
+                      className="size-9 shrink-0 rounded-lg border border-border object-cover"
                     />
                   ) : (
-                    <span className="label text-secondary">File</span>
+                    <HugeiconsIcon
+                      icon={PaperclipIcon}
+                      strokeWidth={2}
+                      className="size-4 text-muted-foreground"
+                    />
                   )}
                   <span className="max-w-40 truncate text-xs" title={attachment.name}>
                     {attachment.name}
                   </span>
-                  <button
-                    type="button"
-                    className="btn btn-quiet min-h-6 px-1"
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={`Remove ${attachment.name}`}
                     onClick={() => removeAttachment(index)}
                   >
-                    ×
-                  </button>
+                    <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                  </Button>
                 </li>
               );
             })}
           </ul>
         ) : null}
 
-        <div className="flex items-end gap-2 rounded-md border border-primary bg-surface p-2 focus-within:border-secondary">
-          <input
+        <div className="flex flex-col rounded-2xl border border-border bg-background p-2 focus-within:ring-3 focus-within:ring-ring/30">
+          <Input
             ref={fileRef}
             className="absolute h-px w-px opacity-0"
             type="file"
@@ -453,18 +444,15 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
               event.target.value = "";
             }}
           />
-          <Button
-            variant="quiet"
-            aria-label="Add attachment"
-            onClick={() => fileRef.current?.click()}
-          >
-            Attach
-          </Button>
-          <textarea
+          <Label htmlFor="composer-message" className="sr-only">
+            Message
+          </Label>
+          <Textarea
             ref={textareaRef}
+            id="composer-message"
             aria-label="Message"
             placeholder="Write a message... (Enter to send, Shift+Enter for a new line)"
-            rows={1}
+            rows={3}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onCompositionStart={() => {
@@ -490,11 +478,43 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
                 void submit();
               }
             }}
-            className="max-h-35 min-h-11 flex-1 resize-none border-0 bg-transparent leading-6 outline-none"
+            className="min-h-24 w-full border-0 bg-transparent px-1 py-2 leading-6 shadow-none focus-visible:ring-0"
           />
-          <Button variant="primary" disabled={!canSend} onClick={() => void submit()}>
-            {sending ? "Sending..." : "Send"}
-          </Button>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Add attachment"
+                onClick={() => fileRef.current?.click()}
+              >
+                <HugeiconsIcon icon={PaperclipIcon} strokeWidth={2} />
+                Attach
+              </Button>
+              {busy ? (
+                <SwitchField label="Steer" checked={steer} onCheckedChange={setSteer} />
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Enter to send - Shift+Enter for a new line
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {(view?.inbox ?? 0) > 0 ? (
+                <Badge variant="secondary">Queued: {view?.inbox}</Badge>
+              ) : null}
+              {busy ? (
+                <Button variant="destructive" size="sm" onClick={() => void stop()}>
+                  <HugeiconsIcon icon={StopIcon} strokeWidth={2} />
+                  Stop
+                </Button>
+              ) : null}
+              <Button disabled={!canSend} onClick={() => void submit()}>
+                <HugeiconsIcon icon={SendIcon} strokeWidth={2} />
+                {sending ? "Sending..." : "Send"}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
