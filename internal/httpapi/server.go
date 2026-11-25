@@ -231,6 +231,9 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	contentType := contentTypeFor(name)
 	w.Header().Set("content-type", contentType)
+	if name == "sw.js" {
+		w.Header().Set("service-worker-allowed", "/")
+	}
 	w.Write(data)
 }
 
@@ -250,6 +253,8 @@ func contentTypeFor(name string) string {
 		return "image/png"
 	case strings.HasSuffix(name, ".json"):
 		return "application/json; charset=utf-8"
+	case strings.HasSuffix(name, ".webmanifest"):
+		return "application/manifest+json"
 	default:
 		return "application/octet-stream"
 	}

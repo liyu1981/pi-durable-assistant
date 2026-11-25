@@ -10,3 +10,6 @@ data/
 tmp/
 web/dist/
 bin/
+
+# local TLS certificates (dev only)
+certs/

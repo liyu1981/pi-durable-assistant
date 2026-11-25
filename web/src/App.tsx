@@ -250,12 +250,12 @@ export function App() {
           >
             <HugeiconsIcon icon={Menu01Icon} strokeWidth={2} />
           </Button>
-          <span
-            className="grid size-9 place-items-center rounded-xl bg-primary font-heading text-lg font-bold text-primary-foreground"
+          <img
+            src="./assets/logo-64.png"
+            alt=""
             aria-hidden="true"
-          >
-            P
-          </span>
+            className="size-9 rounded-xl border border-border object-cover"
+          />
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Pi Durable

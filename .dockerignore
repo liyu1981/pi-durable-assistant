@@ -11,3 +11,4 @@ data
 .env.*
 !web/package.json
 !web/package-lock.json
+certs

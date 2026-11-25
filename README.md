@@ -8,7 +8,8 @@ A self-hosted, single-user durable AI assistant: one static Go binary with an em
 
 - Go 1.26 / toolchain 1.27.4, `github.com/MichaelKinsy/PiG` v0.7.0 (`durable`, `durable/harness`, `ai`, pure-Go SQLite)
 - React 19, TypeScript 7, Vite 8, Tailwind CSS 4, shadcn/ui with the Luma preset (`b2D0wqNxT`), Jotai 3, Biome 2, installed with pnpm; compiled into `web/dist` and embedded with `go:embed`
-- Multi-stage Docker build; no Node.js required at runtime
+- Installable PWA with a web manifest, service worker and offline app shell; logo assets in `web/public/assets/` (64/192/512/1024 plus apple-touch)
+- Configurable HTTP, HTTPS, or both; multi-stage Docker build, no Node.js at runtime
 - All build targets live in `package.json` (`pnpm <script>`); there is no Makefile
 
 ## Quick start (no real API key)
@@ -19,7 +20,14 @@ pnpm dev:install    # one-time: install air (Go live-reload)
 pnpm dev            # watch + rebuild; app on 0.0.0.0:3111
 ```
 
-In development the server always binds `0.0.0.0:3111`. Open http://localhost:3111.
+In development the server binds `0.0.0.0:3111` and serves **HTTPS only** with self-signed certs in the gitignored `certs/` folder. Generate them once with:
+
+```bash
+mkdir -p certs
+mkcert -cert-file certs/localhost.pem -key-file certs/localhost-key.pem localhost 127.0.0.1
+```
+
+Open https://localhost:3111 (your browser will warn unless `mkcert -install` was run).
 
 `pnpm dev` starts the dev-only faux provider, waits until it is reachable, then starts `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server. The HTML entrypoint is served with `no-store` so a rebuild cannot leave a stale shell in the browser.
 
@@ -45,6 +53,8 @@ docker compose up -d
 docker compose ps
 ```
 
+Set `HTTP_MODE=http|https|both` (default `http`); `both` redirects HTTP to HTTPS on `HTTPS_PORT` and expects `TLS_CERT_FILE` / `TLS_KEY_FILE`.
+
 The container publishes only `127.0.0.1:3300` by default. Use an HTTPS reverse proxy and keep HTTP Basic Auth (`demo` user). SQLite lives in the named `/data` volume; never remove it as an upgrade step.
 
 ## HTTP API
@@ -59,6 +69,6 @@ WeChat is intentionally not part of this release. All source, UI text, and docum
 pnpm check              # go test ./..., go build, web typecheck, Biome, Vite build
 ```
 
-See `doc/REWRITE_PLAN.md`, `doc/PIG_SPIKE.md`, and `doc/DESIGN_QA.md`.
+See `doc/ARCHITECTURE.md` for the agent loop, context and persistence model, plus `doc/REWRITE_PLAN.md`, `doc/PIG_SPIKE.md`, and `doc/DESIGN_QA.md`.
 
 **License:** MIT. Not affiliated with Pi, PiG, or official WeChat teams.

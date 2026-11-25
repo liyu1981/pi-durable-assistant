@@ -26,6 +26,10 @@ type Config struct {
 	CrashDemo     bool
 	Production    bool
 	Dev           bool
+	HTTPMode      string
+	HTTPSPort     int
+	CertFile      string
+	KeyFile       string
 }
 
 func env(name, fallback string) string {
@@ -71,6 +75,10 @@ func Load() Config {
 		CrashDemo:     os.Getenv("ENABLE_CRASH_DEMO") == "1",
 		Production:    os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
 		Dev:           os.Getenv("DEV") == "1" || os.Getenv("GO_ENV") == "development" || os.Getenv("NODE_ENV") == "development",
+		HTTPMode:      httpMode(),
+		HTTPSPort:     envInt("HTTPS_PORT", 3443),
+		CertFile:      env("TLS_CERT_FILE", "certs/localhost.pem"),
+		KeyFile:       env("TLS_KEY_FILE", "certs/localhost-key.pem"),
 	}
 }
 
@@ -80,4 +88,14 @@ func (c Config) Redact(value string) string {
 		return strings.ReplaceAll(value, c.APIKey, "***")
 	}
 	return value
+}
+
+func httpMode() string {
+	if value := os.Getenv("HTTP_MODE"); value != "" {
+		return value
+	}
+	if os.Getenv("DEV") == "1" || os.Getenv("GO_ENV") == "development" || os.Getenv("NODE_ENV") == "development" {
+		return "https"
+	}
+	return "http"
 }

@@ -8,6 +8,8 @@ const env = {
   LLM_API_KEY: "faux",
   LLM_MODEL: "faux-1",
   FAUX_PORT: "18789",
+  TLS_CERT_FILE: "certs/localhost.pem",
+  TLS_KEY_FILE: "certs/localhost-key.pem",
 };
 
 const children = [];

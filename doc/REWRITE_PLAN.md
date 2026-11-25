@@ -317,3 +317,15 @@ The `minimal` design was removed completely, including its tokens, fonts, CSS cl
 - Application containers (sidebar, chat column, status column, composer) use the shadcn `muted` background so `bg-card` surfaces stand out; the chat conversation area is muted as well.
 - `pnpm dev` now runs `scripts/dev.mjs`, which starts the dev faux provider and `air` (`air -c .air.toml`). Air watches web and Go sources, debounces changes (800 ms), rebuilds the frontend first with `pnpm web:build`, rebuilds the Go binary, and restarts it on `0.0.0.0:3111`. `pnpm dev:install` installs the pinned air version.
 - Verified: a content change to `web/src/App.tsx` triggered a frontend + backend rebuild and a new server PID with an incremented boot count; `pnpm check` passed after the change.
+
+## 11. PWA and HTTP/HTTPS modes
+
+- Frontend is now an installable PWA: `web/public/manifest.webmanifest`, generated PNG icons (192/512/apple-touch), `web/public/sw.js` (network-first navigation, cache-first static assets, live API/SSE bypass), and registration in `web/src/main.tsx`.
+- Go server supports `HTTP_MODE=http|https|both` (`HTTP_MODE` defaults to `http`, dev defaults to `https`). `both` redirects HTTP to `HTTPS_PORT` and serves HTTPS with `TLS_CERT_FILE` / `TLS_KEY_FILE`.
+- Dev generates self-signed certs in gitignored `certs/` with mkcert; `scripts/dev.mjs` overrides inherited TLS env vars to point at those certs and dev serves `https://0.0.0.0:3111`.
+- Verified: manifest (`application/manifest+json`), service worker (`service-worker-allowed: /`), icons, and all three server modes (http 200, both 308 redirect + https 200, https 200).
+
+
+## 12. Brand logo
+
+The uploaded robot image was resized with `golang.org/x/image/draw` into `web/public/assets/` (`logo-64.png`, `logo-192.png`, `logo-512.png`, `logo-1024.png`, `apple-touch-icon.png`). The 64px version is used in the page header, and the 192/512 versions are the PWA manifest icons. Old generated flat-color icons were removed. Verified the header image loads with natural size 64x64 and no 404s over HTTPS dev.
