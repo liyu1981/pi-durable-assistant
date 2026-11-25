@@ -1,0 +1,127 @@
+import type { MessagePayload, SseStatus, ViewPayload } from "./types";
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** Same-origin JSON request wrapper. The browser supplies cached Basic Auth credentials. */
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  let response: Response;
+  try {
+    response = await fetch(path, { ...init, headers });
+  } catch (error) {
+    throw new ApiError(0, error instanceof Error ? error.message : "网络请求失败");
+  }
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (typeof body.error === "string" && body.error) message = body.error;
+    } catch {
+      // Keep the HTTP status message when the error body is not JSON.
+    }
+    throw new ApiError(response.status, message);
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+export function get<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
+export function post<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+export function sendMessage(
+  conversationId: number,
+  payload: MessagePayload,
+): Promise<{ submissionId: string }> {
+  return post(`/api/conversations/${conversationId}/messages`, payload);
+}
+
+export function imageUrl(conversationId: number, entryId: number, index: number): string {
+  return `/api/conversations/${conversationId}/images/${entryId}/${index}`;
+}
+
+export function exportUrl(conversationId: number): string {
+  return `/api/conversations/${conversationId}/export.md`;
+}
+
+export interface ViewSubscription {
+  close(): void;
+}
+
+/**
+ * Subscribe to the SSE `view` stream for one conversation.
+ * On failure the connection is closed and retried with exponential backoff
+ * (1s … 30s); `close` cancels all pending work.
+ */
+export function subscribeView(
+  conversationId: number,
+  onView: (view: ViewPayload) => void,
+  onStatus: (status: SseStatus) => void = () => {},
+): ViewSubscription {
+  let source: EventSource | null = null;
+  let closed = false;
+  let attempts = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const connect = () => {
+    if (closed) return;
+    onStatus("connecting");
+    const es = new EventSource(`/api/conversations/${conversationId}/events`);
+    source = es;
+
+    es.onopen = () => {
+      attempts = 0;
+      onStatus("open");
+    };
+    es.onerror = () => {
+      if (closed || source !== es) return;
+      es.close();
+      source = null;
+      onStatus("reconnecting");
+      const delay = Math.min(30_000, 1000 * 2 ** attempts);
+      attempts += 1;
+      timer = setTimeout(connect, delay);
+    };
+    es.addEventListener("view", (event: Event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as ViewPayload;
+        onView(payload);
+      } catch (error) {
+        console.error("无法解析 SSE view 数据", error);
+      }
+    });
+  };
+
+  connect();
+
+  return {
+    close() {
+      if (closed) return;
+      closed = true;
+      if (timer !== null) clearTimeout(timer);
+      if (source) {
+        source.close();
+        source = null;
+      }
+      onStatus("closed");
+    },
+  };
+}

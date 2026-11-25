@@ -1,5 +1,13 @@
-node_modules
-data
-.env
 .git
+.gitignore
+node_modules
+web/node_modules
+web/dist
+bin
+tmp
+data
 *.sqlite*
+.env
+.env.*
+!web/package.json
+!web/package-lock.json

@@ -1,7 +1,8 @@
-# 协作规则（给参与本仓库的所有 Agent / CLI）
+# Collaboration rules (Go rewrite)
 
-- 当前功能与运行方式以 `README.md` 为准，设计规格参照 `SPEC.md`，v3 已交付 API、限制与第二阶段计划参照 `docs/V3_PLAN.md`。`SPEC.md` 中 v1/v2 段落含历史设计记录；有冲突时先核对实际代码与固定版本 API。
-- API 以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不凭记忆编 API。
-- 只改明确要求的文件；修改 `SPEC.md`、`AGENTS.md`、`package.json` 或引入依赖需要有用户/项目负责人明确要求，默认保持原生 ESM、无前端构建步骤。
-- 不读取、不打印任何 `.env` 和密钥；不访问远程服务器；不执行 git commit / push（由编排者统一提交）。
-- 写完运行 `npm run check`、`npm test` 与适用的本地验证；交付时列出：改了哪些文件、怎么验证的、哪些没验证，不把 CI 通过等同于生产部署验证。
+- The current implementation and run instructions live in `README.md`; the rewrite plan and decisions live in `doc/REWRITE_PLAN.md`.
+- Backend APIs are defined by the pinned `github.com/MichaelKinsy/PiG` v0.7.0 source in the Go module cache (`go doc`, `pkg.go.dev`). Do not invent APIs from memory; verify signatures against the pinned version.
+- The frontend is React 19 + TypeScript 7 + Vite 8 + Tailwind 4 + Jotai 3 + Biome 2. Do not add ESLint, Prettier, or typescript-eslint.
+- The `minimal` design tokens in `web/src/styles/tokens.css` are authoritative; prefer semantic tokens over raw values.
+- Never read or print `.env` files or secrets. Never access remote servers except dependency downloads and the explicit dev-time faux provider on loopback.
+- Before finishing: run `make check` (`go test ./...`, `go build`), `cd web && npm run typecheck && npm run check && npm run build`, and report what was and was not verified. CI passing is not production validation.

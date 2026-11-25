@@ -1,13 +1,24 @@
-FROM node:22-slim
+FROM node:24-alpine AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+FROM golang:1.27.4-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web /web/dist ./web/dist
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/app . \
+    && mkdir -p /data && chmod 0777 /data
+
+FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY server.mjs ./
-COPY lib ./lib
-COPY public ./public
-ENV NODE_ENV=production DATA_DIR=/data PORT=3000 NODE_NO_WARNINGS=1
-# 数据目录交给非 root 用户；命名卷首次创建时会继承这个属主
-RUN mkdir -p /data && chown node:node /data
-USER node
+COPY --from=build /out/app /app/app
+COPY --from=build --chown=65532:65532 /data /data
+ENV DATA_DIR=/data PORT=3000 NODE_ENV=production NODE_NO_WARNINGS=1
+USER 65532:65532
 EXPOSE 3000
-CMD ["node", "server.mjs"]
+ENTRYPOINT ["/app/app"]

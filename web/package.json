@@ -1,0 +1,33 @@
+{
+  "name": "pi-durable-assistant-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/inconsolata": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/open-sans": "5.3.0",
+    "jotai": "3.0.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.9",
+    "@tailwindcss/vite": "4.3.5",
+    "@types/react": "19.3.1",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  }
+}
