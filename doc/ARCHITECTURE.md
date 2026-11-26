@@ -6,7 +6,7 @@ This document describes how the current Go implementation actually works. Code r
 
 ### Process startup
 
-1. `main.go` loads configuration (`internal/config/config.go`) and starts the HTTP/HTTPS listeners.
+1. `cmd/pida/main.go` parses the CLI. `pida serve` loads `~/.pida/pida.env` when present, applies flag overrides, and resolves the runtime configuration through `internal/config` (`config.go` plus `file.go` for the env-style file), then starts the HTTP/HTTPS listeners.
 2. `runtime.Open` (`internal/runtime/runtime.go`) creates the runtime:
    - `internal/settings.Open` opens `DATA_DIR/agent.sqlite`, applies pending app migrations, and loads the single `app_llm_config` row. A new database is seeded from the legacy `LLM_*` environment variables; afterwards SQLite is authoritative and the environment is ignored until that row is reset.
    - `createModels` builds a PiG `ai.Models` catalog with one provider (`demo`) from the stored settings. Supported wire protocols are `openai-completions`, `openai-responses`, and `anthropic-messages`. `Runtime.ApplyLLM` replaces that provider in place when the user saves settings, so no restart is needed.
@@ -49,7 +49,7 @@ The application does **not** implement its own conversation loop. PiG's durable 
 
 ### Development provider
 
-In dev, `pnpm dev` starts `cmd/faux-llm` first, waits for it on `127.0.0.1:18789`, then starts air. The faux server is a standalone OpenAI-compatible HTTP service outside the main binary. Its script emits: three `todo` additions, `wait_seconds(10)`, three todo completions, then `Demo task complete.` The main binary only knows the normal `openai-completions` provider.
+In dev, `pnpm dev` starts air with `DEV=1` and `HTTP_MODE=https` (self-signed TLS on `0.0.0.0:3111`). `pnpm dev:demo` additionally starts `cmd/faux-llm` first, waits for it on `127.0.0.1:18789`, then starts air, and points the dev server at it. The faux server is a standalone OpenAI-compatible HTTP service outside the main binary. Its script emits: three `todo` additions, `wait_seconds(10)`, three todo completions, then `Demo task complete.` The main binary only knows the normal `openai-completions` provider.
 
 ## 2. How context is managed
 
@@ -185,11 +185,11 @@ flowchart TB
 
 | Concern | File |
 | --- | --- |
-| Process start and listener modes | `main.go`, `internal/config/config.go` |
+| Process start, CLI, and listener modes | `cmd/pida/main.go`, `cmd/pida/cmd_config.go`, `cmd/pida/cmd_service.go`, `internal/config/config.go`, `internal/config/file.go`, `internal/service/service.go` |
 | Runtime bootstrap and harness | `internal/runtime/runtime.go` |
 | Stored model settings, migrations, provider probe | `internal/settings/*` |
 | Global settings dialog (Models / About tabs) | `web/src/components/SystemSettingsDialog.tsx` |
-| HTTP routes, auth, SSE, static/PWA assets | `internal/httpapi/*` |
+| HTTP routes, auth, SSE, static/PWA assets | `internal/httpapi/*`, `web/embed.go` (embedded `web/dist`) |
 | Tool definitions and delegation | `internal/tools/tools.go` |
 | Reminder/schedule/background tasks | `internal/tasks/tasks.go` |
 | Persistent documents | `internal/docs/docs.go`, `internal/personal/personal.go` |

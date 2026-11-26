@@ -12,14 +12,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/app . \
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/pida ./cmd/pida \
     && mkdir -p /data && chmod 0777 /data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-COPY --from=build /out/app /app/app
+COPY --from=build /out/pida /app/pida
 COPY --from=build --chown=65532:65532 /data /data
 ENV DATA_DIR=/data PORT=3000 NODE_ENV=production NODE_NO_WARNINGS=1
 USER 65532:65532
 EXPOSE 3000
-ENTRYPOINT ["/app/app"]
+ENTRYPOINT ["/app/pida", "serve"]

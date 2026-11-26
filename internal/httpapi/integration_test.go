@@ -172,6 +172,41 @@ func TestPersonalRoutes(t *testing.T) {
 	}
 }
 
+func TestToolsRoute(t *testing.T) {
+	client := newTestServer(t)
+	status, body := client.do("GET", "/api/tools", nil)
+	if status != http.StatusOK {
+		t.Fatalf("tools status: %d %v", status, body)
+	}
+	raw, ok := body["tools"].([]any)
+	if !ok || len(raw) == 0 {
+		t.Fatalf("tools list missing or empty: %v", body)
+	}
+	names := map[string]bool{}
+	for _, entry := range raw {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("tool entry must be an object: %v", entry)
+		}
+		name, _ := item["name"].(string)
+		if name == "" {
+			t.Fatalf("tool entry needs a name: %v", item)
+		}
+		if names[name] {
+			t.Fatalf("duplicate tool %q", name)
+		}
+		names[name] = true
+	}
+	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge"} {
+		if !names[want] {
+			t.Fatalf("missing tool %q in %v", want, names)
+		}
+	}
+	if extensions, ok := body["extensions"].([]any); !ok || len(extensions) != 4 {
+		t.Fatalf("expected four installed extensions: %v", body["extensions"])
+	}
+}
+
 func TestV3ManagementRoutes(t *testing.T) {
 	client := newTestServer(t)
 	id := client.createConversation()

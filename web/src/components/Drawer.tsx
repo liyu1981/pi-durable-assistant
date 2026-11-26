@@ -8,18 +8,22 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { drawerAtom } from "../atoms";
+import { type DrawerPanel, drawerAtom } from "../atoms";
 import { KnowledgePanel } from "./KnowledgePanel";
-import { PersonalPanel } from "./PersonalPanel";
+import { MemoryPanel } from "./MemoryPanel";
+import { SkillsPanel } from "./SkillsPanel";
 import { StatusPanel } from "./StatusPanel";
 import { TaskCenter } from "./TaskCenter";
+import { ToolsPanel } from "./ToolsPanel";
 
-const TABS = [
+const TABS: { key: DrawerPanel; label: string }[] = [
   { key: "status", label: "Status" },
   { key: "tasks", label: "Tasks" },
-  { key: "personal", label: "Memory & skills" },
+  { key: "memory", label: "Memory" },
+  { key: "skills", label: "Skills" },
+  { key: "tools", label: "Tools" },
   { key: "knowledge", label: "Knowledge" },
-] as const;
+];
 
 export function Drawer() {
   const [drawer, setDrawer] = useAtom(drawerAtom);
@@ -33,21 +37,18 @@ export function Drawer() {
         <SheetHeader className="border-b border-border">
           <SheetTitle>Management</SheetTitle>
           <SheetDescription>
-            Review schedules, reminders, memory, and the knowledge base.
+            Review schedules, reminders, memory, skills, tools, and the knowledge base.
           </SheetDescription>
         </SheetHeader>
         <Tabs
           value={drawer.panel}
           onValueChange={(value) =>
-            setDrawer({
-              open: true,
-              panel: (value ?? "status") as "status" | "tasks" | "personal" | "knowledge",
-            })
+            setDrawer({ open: true, panel: (value ?? "status") as DrawerPanel })
           }
           className="min-h-0 flex-1 gap-0"
         >
-          <div className="shrink-0 border-b border-border px-4 py-3">
-            <TabsList className="w-full">
+          <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-3">
+            <TabsList className="w-max min-w-full">
               {TABS.map((tab) => (
                 <TabsTrigger key={tab.key} value={tab.key}>
                   {tab.label}
@@ -63,8 +64,14 @@ export function Drawer() {
               <TabsContent value="tasks" className="mt-0">
                 <TaskCenter />
               </TabsContent>
-              <TabsContent value="personal" className="mt-0">
-                <PersonalPanel />
+              <TabsContent value="memory" className="mt-0">
+                <MemoryPanel />
+              </TabsContent>
+              <TabsContent value="skills" className="mt-0">
+                <SkillsPanel />
+              </TabsContent>
+              <TabsContent value="tools" className="mt-0">
+                <ToolsPanel />
               </TabsContent>
               <TabsContent value="knowledge" className="mt-0">
                 <KnowledgePanel />

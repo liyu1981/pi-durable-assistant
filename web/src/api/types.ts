@@ -214,6 +214,21 @@ export interface KnowledgeStatus {
   allow: string[];
 }
 
+/** One entry of `GET /api/tools`: a tool the agent can call. */
+export interface ToolInfo {
+  name: string;
+  description: string;
+  /** Name of the installed extension that registered the tool. */
+  extension: string;
+  /** JSON Schema of the tool arguments. */
+  parameters?: Record<string, unknown>;
+}
+
+export interface ToolsData {
+  tools: ToolInfo[];
+  extensions: string[];
+}
+
 export interface PersonalData {
   memory: MemoryItem[];
   skills: SkillItem[];

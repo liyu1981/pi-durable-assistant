@@ -51,9 +51,12 @@ export const rightPanelCollapsedAtom = atomWithStorage("pi.rightPanelCollapsed",
 
 export const systemSettingsOpenAtom = atom(false);
 
+/** Panels available in the right-hand management drawer. */
+export type DrawerPanel = "tasks" | "memory" | "skills" | "tools" | "knowledge" | "status";
+
 export const drawerAtom = atom<{
   open: boolean;
-  panel: "tasks" | "personal" | "knowledge" | "status";
+  panel: DrawerPanel;
 }>({
   open: false,
   panel: "tasks",

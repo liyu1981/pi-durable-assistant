@@ -73,7 +73,8 @@ Source: `liyu1981/awesome-design-skills/skills/minimal/{DESIGN.md,SKILL.md}`.
 
 ```
 .
-├── main.go                         # package main; //go:embed web/dist; starts HTTP server
+├── cmd/pida/                       # package main: main.go (CLI + serve), cmd_config.go, cmd_service.go
+├── web/embed.go                    # //go:embed dist — exposes web/dist to the binary
 ├── go.mod / go.sum                 # module github.com/liyu1981/pi-durable-assistant (Go 1.26, toolchain 1.27.4)
 ├── Makefile                        # web, web-dev, dev-faux, build, test, check, lint, format, docker
 ├── .env.example                    # same variable names as today, minus WECHAT_*
@@ -126,7 +127,7 @@ Source: `liyu1981/awesome-design-skills/skills/minimal/{DESIGN.md,SKILL.md}`.
 7. `Makefile`: `web`, `web-dev`, `dev-faux` (start faux server + app), `build`, `test`, `check`, `lint`, `format`, `docker`.
 8. Multi-stage `Dockerfile`:
    - stage 1 `node:24-alpine`: `pnpm install --frozen-lockfile && pnpm build`
-   - stage 2 `golang:1.27.4`: `CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/app .`
+   - stage 2 `golang:1.27.4`: `CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/pida .`
    - stage 3 `gcr.io/distroless/static-debian12:nonroot` (or `scratch`): copy binary, `USER 65532`, `ENV DATA_DIR=/data PORT=3000`, `EXPOSE 3000`.
 9. `compose.yaml`: keep `127.0.0.1:${HOST_PORT:-3300}:3000`, named `/data` volume, `restart: unless-stopped`, `read_only: true`, `tmpfs`, `no-new-privileges`, mem/cpu limits. **No wx-bot service or WeChat ports/env.**
 

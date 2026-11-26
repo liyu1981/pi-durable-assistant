@@ -5,12 +5,14 @@ import {
   BookOpen01Icon,
   BrainIcon,
   DownloadIcon,
+  MagicWand01Icon,
   Menu01Icon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PanelRightCloseIcon,
   PanelRightOpenIcon,
   SettingsIcon,
+  ToolboxIcon,
   Wifi01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -295,9 +297,17 @@ export function App() {
                 <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
                 Tasks
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "personal" })}>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "memory" })}>
                 <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
-                Memory &amp; skills
+                Memory
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "skills" })}>
+                <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
+                Skills
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "tools" })}>
+                <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
+                Tools
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
                 <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
@@ -330,10 +340,28 @@ export function App() {
             variant="ghost"
             size="sm"
             className="hidden md:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "personal" })}
+            onClick={() => setDrawer({ open: true, panel: "memory" })}
           >
             <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
             Memory
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden lg:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "skills" })}
+          >
+            <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
+            Skills
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden lg:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "tools" })}
+          >
+            <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
+            Tools
           </Button>
           <Button
             variant="ghost"

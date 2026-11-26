@@ -1,17 +1,17 @@
 # Air config for `pnpm dev`: rebuild the web assets first, then the Go binary.
 root = "."
-tmp_dir = "bin"
+tmp_dir = "dist"
 
 [build]
-  cmd = "pnpm web:build && go build -o ./bin/assistant-server ."
-  entrypoint = ["./bin/assistant-server"]
+  cmd = "pnpm web:build && go build -o ./dist/pida ./cmd/pida"
+  entrypoint = ["./dist/pida", "serve"]
   delay = 800
   stop_on_error = true
   include_ext = ["go", "ts", "tsx", "css", "html", "json"]
   include_file = ["go.mod", "go.sum", "package.json", "web/pnpm-lock.yaml", "web/vite.config.ts", "web/tsconfig.json", "web/.npmrc"]
-  exclude_dir = [".git", "bin", "data", "tmp", "web/node_modules", "web/dist", "node_modules"]
+  exclude_dir = [".git", "bin", "dist", "data", "tmp", "web/node_modules", "web/dist", "node_modules"]
   exclude_file = []
-  log = "bin/build-errors.log"
+  log = "dist/build-errors.log"
 
 [log]
   time = true

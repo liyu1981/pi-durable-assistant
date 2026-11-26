@@ -30,6 +30,8 @@ type Runtime struct {
 	Models  *ai.Models
 	// Settings persists the UI-owned model configuration in agent.sqlite.
 	Settings *settings.Store
+	// Registry exposes the installed extensions and their tools to the API.
+	Registry harness.RegistryReader
 
 	mu         sync.RWMutex
 	llm        settings.Config
@@ -228,6 +230,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		Root:       root,
 		Models:     models,
 		Settings:   store,
+		Registry:   registry,
 		llm:        stored,
 		modelRef:   model,
 		modelLabel: label,

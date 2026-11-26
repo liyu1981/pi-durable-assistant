@@ -4,10 +4,12 @@ import {
   BrainIcon,
   Calendar01Icon,
   Clock01Icon,
+  MagicWand01Icon,
   NotebookIcon,
   ServerIcon,
   SettingsIcon,
   StickyNoteIcon,
+  ToolboxIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
@@ -306,10 +308,26 @@ export function StatusPanel({ className }: { className?: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDrawer({ open: true, panel: "personal" })}
+              onClick={() => setDrawer({ open: true, panel: "memory" })}
             >
               <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
-              Memory &amp; skills
+              Memory
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrawer({ open: true, panel: "skills" })}
+            >
+              <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
+              Skills
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrawer({ open: true, panel: "tools" })}
+            >
+              <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
+              Tools
             </Button>
             <Button
               variant="outline"

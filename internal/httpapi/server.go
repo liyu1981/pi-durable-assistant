@@ -4,7 +4,6 @@ package httpapi
 import (
 	"crypto/subtle"
 	"encoding/json"
-	"runtime/debug"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -69,6 +69,7 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("GET /api/personal", server.getPersonal)
 	mux.HandleFunc("POST /api/personal/{kind}", server.postPersonal)
 	mux.HandleFunc("POST /api/personal/{kind}/{uuid}/{action}", server.decidePersonal)
+	mux.HandleFunc("GET /api/tools", server.listTools)
 	mux.HandleFunc("GET /api/knowledge/search", server.searchKnowledge)
 	mux.HandleFunc("GET /api/knowledge/read", server.readKnowledge)
 	server.handler = server.middleware(mux)

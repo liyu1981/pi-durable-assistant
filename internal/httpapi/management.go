@@ -403,6 +403,36 @@ func (s *Server) getPersonal(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// listTools reports every tool the agent can call, grouped by extension.
+func (s *Server) listTools(w http.ResponseWriter, r *http.Request) {
+	if s.Runtime.Registry == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"tools": []any{}, "extensions": []any{}})
+		return
+	}
+	snapshot := s.Runtime.Registry.Snapshot()
+	extensions := snapshot.Installed()
+	extensionNames := make([]string, 0, len(extensions))
+	for _, extension := range extensions {
+		extensionNames = append(extensionNames, extension.Name)
+	}
+	items := snapshot.Tools()
+	tools := make([]map[string]any, 0, len(items))
+	for _, entry := range items {
+		if entry.Tool == nil {
+			continue
+		}
+		extension := ""
+		if entry.Extension != nil {
+			extension = entry.Extension.Name
+		}
+		tools = append(tools, map[string]any{
+			"name": entry.Tool.Name, "description": entry.Tool.Description,
+			"extension": extension, "parameters": entry.Tool.Parameters,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tools": tools, "extensions": extensionNames})
+}
+
 func (s *Server) postPersonal(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")
 	if kind != "memory" && kind != "skills" && kind != "skill" {

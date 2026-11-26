@@ -17,7 +17,7 @@ A self-hosted, single-user durable AI assistant: one static Go binary with an em
 ```bash
 pnpm install
 pnpm dev:install    # one-time: install air (Go live-reload)
-pnpm dev            # watch + rebuild; app on 0.0.0.0:3111
+pnpm dev            # watch + rebuild; app on https://localhost:3111
 ```
 
 In development the server binds `0.0.0.0:3111` and serves **HTTPS only** with self-signed certs in the gitignored `certs/` folder. Generate them once with:
@@ -29,9 +29,29 @@ mkcert -cert-file certs/localhost.pem -key-file certs/localhost-key.pem localhos
 
 Open https://localhost:3111 (your browser will warn unless `mkcert -install` was run).
 
-`pnpm dev` starts the dev-only faux provider, waits until it is reachable, then starts `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server. The HTML entrypoint is served with `no-store` so a rebuild cannot leave a stale shell in the browser.
+`pnpm dev` starts `air`, which watches both `web/src` and the Go sources. After a change it debounces, rebuilds the frontend, rebuilds the binary, and restarts the server. The HTML entrypoint is served with `no-store` so a rebuild cannot leave a stale shell in the browser.
 
-The deterministic local script (add todos, wait 10 seconds, complete todos, final answer) is served by `cmd/faux-llm`, a development-only process outside the main binary. Use `pnpm dev:faux` if you only need the provider.
+`pnpm dev:demo` additionally starts the dev-only faux provider (`cmd/faux-llm`), waits until it is reachable, and points the dev server at it, so the full deterministic demo works without a real API key. Use `pnpm dev:faux` if you only need the provider.
+
+## CLI
+
+The binary is a small command-line tool. Install it where the service unit expects it with `CGO_ENABLED=0 go build -o ~/.local/bin/pida ./cmd/pida`, or use `dist/pida` from `pnpm build`:
+
+```bash
+pida                      # print usage
+pida --version            # print the version
+pida serve                # start the server
+pida config               # write an example pida.env in the current directory
+pida config --update      # upgrade pida.env, preserving configured values
+pida service-install      # install a systemd user service
+pida service-uninstall    # remove it
+```
+
+`pida serve` reads `~/.pida/pida.env` when it exists and stores state in `~/.pida`. Precedence is command-line flags, then the process environment, then the config file, then built-in defaults. `pida serve --help` lists the flags: `--port`, `--data-dir`, `--http-mode`, `--https-port`, `--cert-file`, `--key-file`, `--config`, `--password`, `--dev`, and `--production`.
+
+`pida config` writes a commented example covering every supported key. Re-run `pida config --update` after an upgrade to add new keys while keeping values you already set; keys this version does not document are kept at the end of the file.
+
+`pida service-install` writes `~/.config/systemd/user/pida.service`, running `~/.local/bin/pida serve` with `DATA_DIR=~/.pida`, then prints the `systemctl --user` commands to enable it. Use `--print` to inspect the unit, `--force` to overwrite an existing one, and `--binary` / `--data-dir` to override the defaults.
 
 ## Connect a real model
 
@@ -39,7 +59,7 @@ Build and start the server, then open **System settings** in the app header (or 
 
 ```bash
 pnpm build
-./bin/pi-durable-assistant
+./dist/pida serve
 ```
 
 Pick a protocol (`openai-completions`, `openai-responses`, `anthropic-messages`), enter the base URL, model and optional API key, then use **Test connection** before **Save settings**. Changes are stored in the `app_llm_config` table of `DATA_DIR/agent.sqlite` and applied to the running server immediately; the stored key is never returned to the browser.
