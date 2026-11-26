@@ -150,6 +150,7 @@ export interface ServerInfo {
   pid: number;
   startedAt: string;
   boots: number;
+  dev?: boolean;
 }
 
 export interface ScheduleItem {

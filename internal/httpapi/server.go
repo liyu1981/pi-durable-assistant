@@ -207,7 +207,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"model": s.Runtime.Label(), "api": s.Runtime.LLM().API, "pid": os.Getpid(),
-		"startedAt": s.StartedAt, "boots": boots,
+		"startedAt": s.StartedAt, "boots": boots, "dev": s.Config.Dev,
 	})
 }
 

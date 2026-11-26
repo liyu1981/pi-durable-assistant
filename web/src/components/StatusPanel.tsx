@@ -340,19 +340,21 @@ export function StatusPanel({ className }: { className?: string }) {
           </CardContent>
         </Card>
 
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HugeiconsIcon icon={StickyNoteIcon} strokeWidth={2} />
-              Demo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button variant="destructive" size="sm" onClick={() => setConfirmCrash(true)}>
-              Simulate crash
-            </Button>
-          </CardContent>
-        </Card>
+        {serverInfo?.dev ? (
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HugeiconsIcon icon={StickyNoteIcon} strokeWidth={2} />
+                Demo
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button variant="destructive" size="sm" onClick={() => setConfirmCrash(true)}>
+                Simulate crash
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       <ConfirmDialog
