@@ -197,13 +197,13 @@ func TestToolsRoute(t *testing.T) {
 		}
 		names[name] = true
 	}
-	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge"} {
+	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge", "artifact_create"} {
 		if !names[want] {
 			t.Fatalf("missing tool %q in %v", want, names)
 		}
 	}
-	if extensions, ok := body["extensions"].([]any); !ok || len(extensions) != 4 {
-		t.Fatalf("expected four installed extensions: %v", body["extensions"])
+	if extensions, ok := body["extensions"].([]any); !ok || len(extensions) != 5 {
+		t.Fatalf("expected five installed extensions: %v", body["extensions"])
 	}
 }
 

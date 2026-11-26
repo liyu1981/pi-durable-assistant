@@ -14,6 +14,7 @@ import (
 	"github.com/MichaelKinsy/PiG/durable"
 	"github.com/MichaelKinsy/PiG/durable/harness"
 	"github.com/MichaelKinsy/PiG/durable/storage/sqlite/node"
+	"github.com/liyu1981/pi-durable-assistant/internal/artifacts"
 	"github.com/liyu1981/pi-durable-assistant/internal/config"
 	"github.com/liyu1981/pi-durable-assistant/internal/docs"
 	"github.com/liyu1981/pi-durable-assistant/internal/knowledge"
@@ -32,6 +33,8 @@ type Runtime struct {
 	Settings *settings.Store
 	// Registry exposes the installed extensions and their tools to the API.
 	Registry harness.RegistryReader
+	// Artifacts is the durable file subsystem the agent works through.
+	Artifacts *artifacts.Store
 
 	mu         sync.RWMutex
 	llm        settings.Config
@@ -172,6 +175,10 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 	}
 	redactor := &secretHolder{value: stored.APIKey}
 	registry := harness.CreateRegistry()
+	artifactsStore := artifacts.NewStore(filepath.Join(cfg.DataDir, "artifacts"))
+	if err := registry.Install(artifacts.Extension(artifactsStore)); err != nil {
+		return nil, err
+	}
 	for _, extension := range []*durable.Extension{
 		tools.Assistant, tools.Delegate, personal.Extension, knowledge.Extension,
 	} {
