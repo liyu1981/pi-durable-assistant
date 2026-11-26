@@ -294,7 +294,7 @@ export function SettingsPanel() {
                     placeholder="Type a model or choose from the list"
                     spellCheck={false}
                   />
-                  <ComboboxContent className="min-w-0">
+                  <ComboboxContent>
                     <ComboboxList>
                       {models.map((model) => (
                         <ComboboxItem key={model} value={model}>
