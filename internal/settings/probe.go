@@ -19,6 +19,16 @@ type ProbeResult struct {
 	LatencyMS int64    `json:"latencyMs"`
 }
 
+// ListModels fetches the provider's model catalog using only the base URL,
+// wire protocol and optional API key. It does not require a model to be chosen
+// yet, and never persists or returns credentials.
+func ListModels(ctx context.Context, cfg Config) (ProbeResult, error) {
+	if err := cfg.ValidateConnection(); err != nil {
+		return ProbeResult{}, err
+	}
+	return fetchModels(ctx, cfg)
+}
+
 // Probe performs a lightweight GET on the provider's models endpoint. It
 // validates the URL, API key and wire protocol without generating tokens.
 // Loopback is allowed so the local development provider can be tested too.
@@ -26,6 +36,10 @@ func Probe(ctx context.Context, cfg Config) (ProbeResult, error) {
 	if err := cfg.Validate(); err != nil {
 		return ProbeResult{}, err
 	}
+	return fetchModels(ctx, cfg)
+}
+
+func fetchModels(ctx context.Context, cfg Config) (ProbeResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 

@@ -55,9 +55,10 @@ func Defaults() Config {
 	}
 }
 
-// Validate rejects values that cannot produce a working provider. A key is
-// optional because some local servers do not require authentication.
-func (c Config) Validate() error {
+// ValidateConnection checks only the fields needed to discover models from a
+// provider. A model and token limits are not required until a configuration is
+// saved, and a key is optional for local servers.
+func (c Config) ValidateConnection() error {
 	supported := false
 	for _, api := range SupportedAPIs {
 		if c.API == api {
@@ -75,11 +76,23 @@ func (c Config) Validate() error {
 	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
 		return fmt.Errorf("base URL must start with http:// or https://")
 	}
+	if len(base) > 2048 || len(c.APIKey) > 4096 {
+		return fmt.Errorf("base URL or API key is too long")
+	}
+	return nil
+}
+
+// Validate rejects values that cannot produce a working provider. A key is
+// optional because some local servers do not require authentication.
+func (c Config) Validate() error {
+	if err := c.ValidateConnection(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(c.Model) == "" {
 		return fmt.Errorf("model is required")
 	}
-	if len(c.Model) > 256 || len(base) > 2048 || len(c.APIKey) > 4096 {
-		return fmt.Errorf("model, base URL or API key is too long")
+	if len(c.Model) > 256 {
+		return fmt.Errorf("model is too long")
 	}
 	if c.ContextWindow < 1000 || c.ContextWindow > 100_000_000 {
 		return fmt.Errorf("context window must be between 1000 and 100000000")

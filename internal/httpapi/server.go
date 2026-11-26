@@ -47,6 +47,7 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("GET /api/settings/llm", server.getLLMSettings)
 	mux.HandleFunc("PUT /api/settings/llm", server.putLLMSettings)
 	mux.HandleFunc("POST /api/settings/llm/test", server.testLLMSettings)
+	mux.HandleFunc("POST /api/settings/llm/models", server.listLLMMModels)
 	mux.HandleFunc("GET /api/crash", server.notFound)
 	mux.HandleFunc("POST /api/crash", server.crash)
 	mux.HandleFunc("GET /api/conversations", server.listConversations)

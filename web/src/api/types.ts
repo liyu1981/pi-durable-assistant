@@ -297,6 +297,13 @@ export interface LLMSettingsInput {
   maxTokens: number;
 }
 
+/** Fields needed to discover models; no model or token limits required. */
+export interface LLMModelsInput {
+  api: string;
+  baseURL: string;
+  apiKey?: string;
+}
+
 export interface LLMTestResult {
   ok: boolean;
   models: string[];

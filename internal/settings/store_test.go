@@ -132,6 +132,20 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateConnectionAllowsMissingModel(t *testing.T) {
+	cfg := testDefaults()
+	cfg.Model = ""
+	cfg.ContextWindow = 0
+	cfg.MaxTokens = 0
+	if err := cfg.ValidateConnection(); err != nil {
+		t.Fatalf("connection validation must not require a model: %v", err)
+	}
+	cfg.BaseURL = "ftp://example.com"
+	if err := cfg.ValidateConnection(); err == nil {
+		t.Fatal("invalid base URL accepted by connection validation")
+	}
+}
+
 func TestPublicHidesKey(t *testing.T) {
 	cfg := testDefaults()
 	public := cfg.Public()

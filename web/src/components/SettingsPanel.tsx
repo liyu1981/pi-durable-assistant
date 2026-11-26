@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getLLMSettings, saveLLMSettings, testLLMSettings } from "../api/client";
+import { fetchLLMModels, getLLMSettings, saveLLMSettings, testLLMSettings } from "../api/client";
 import type { LLMSettings, LLMSettingsInput } from "../api/types";
 import { serverInfoAtom } from "../atoms";
 import { useToast } from "../lib/useToast";
@@ -45,11 +45,17 @@ function toForm(settings: LLMSettings): FormState {
   };
 }
 
-function validate(form: FormState): string | null {
+function validateBaseURL(form: FormState): string | null {
   if (!form.baseURL.trim()) return "Base URL is required.";
   if (!/^https?:\/\//.test(form.baseURL.trim())) {
     return "Base URL must start with http:// or https://.";
   }
+  return null;
+}
+
+function validate(form: FormState): string | null {
+  const baseError = validateBaseURL(form);
+  if (baseError) return baseError;
   if (!form.model.trim()) return "Model is required.";
   const windowSize = Number(form.contextWindow);
   const maxTokens = Number(form.maxTokens);
@@ -71,7 +77,8 @@ export function SettingsPanel() {
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"test" | "save" | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [busy, setBusy] = useState<"test" | "save" | "models" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +99,7 @@ export function SettingsPanel() {
   const update = useCallback((key: keyof FormState, value: string) => {
     setForm((previous) => (previous ? { ...previous, [key]: value } : previous));
     setNotice(null);
+    if (key === "api" || key === "baseURL" || key === "apiKey") setModels([]);
   }, []);
 
   const input = useCallback((): LLMSettingsInput | null => {
@@ -109,6 +117,40 @@ export function SettingsPanel() {
     return value;
   }, [form]);
 
+  const fetchModels = async () => {
+    if (!form) {
+      setError("Settings are still loading.");
+      return;
+    }
+    const baseError = validateBaseURL(form);
+    if (baseError) {
+      setError(baseError);
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setBusy("models");
+    try {
+      const input: { api: string; baseURL: string; apiKey?: string } = {
+        api: form.api,
+        baseURL: form.baseURL.trim(),
+      };
+      if (form.apiKey.trim()) input.apiKey = form.apiKey.trim();
+      const result = await fetchLLMModels(input);
+      setModels(result.models);
+      setNotice(
+        result.models.length > 0
+          ? `Found ${result.models.length} model(s) in ${result.latencyMs} ms. Pick one below.`
+          : `Connected in ${result.latencyMs} ms, but the provider returned no models.`,
+      );
+    } catch (cause) {
+      setModels([]);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const test = async () => {
     const value = input();
     const invalid = value ? validate(form as FormState) : "Settings are still loading.";
@@ -121,6 +163,7 @@ export function SettingsPanel() {
     setBusy("test");
     try {
       const result = await testLLMSettings(value);
+      setModels(result.models);
       const names = result.models.slice(0, 3).join(", ");
       setNotice(`Connected in ${result.latencyMs} ms${names ? `. Models: ${names}` : "."}`);
     } catch (cause) {
@@ -216,14 +259,6 @@ export function SettingsPanel() {
                 spellCheck={false}
               />
             </Field>
-            <Field label="Model">
-              <Input
-                value={form.model}
-                placeholder="gpt-4o-mini"
-                onChange={(event) => update("model", event.target.value)}
-                spellCheck={false}
-              />
-            </Field>
             <Field
               label={loaded.apiKeySet ? "API key (a key is already stored)" : "API key (optional)"}
             >
@@ -236,6 +271,43 @@ export function SettingsPanel() {
                 autoComplete="off"
                 onChange={(event) => update("apiKey", event.target.value)}
               />
+            </Field>
+            <Field label="Model">
+              <div className="flex flex-col gap-2">
+                <Input
+                  value={form.model}
+                  placeholder="gpt-4o-mini"
+                  onChange={(event) => update("model", event.target.value)}
+                  spellCheck={false}
+                />
+                {models.length > 0 ? (
+                  <Select
+                    value={models.includes(form.model) ? form.model : undefined}
+                    onValueChange={(value) => value && update("model", value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a model returned by the provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => void fetchModels()}
+                  disabled={busy !== null}
+                >
+                  {busy === "models" ? "Fetching..." : "Fetch models"}
+                </Button>
+              </div>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Context window">

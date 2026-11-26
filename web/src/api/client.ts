@@ -1,4 +1,5 @@
 import type {
+  LLMModelsInput,
   LLMSettings,
   LLMSettingsInput,
   LLMTestResult,
@@ -65,6 +66,11 @@ export function getLLMSettings(): Promise<LLMSettings> {
 /** Save model settings; the change takes effect without a server restart. */
 export function saveLLMSettings(value: LLMSettingsInput): Promise<LLMSettings> {
   return put<LLMSettings>("/api/settings/llm", value);
+}
+
+/** Discover models from a base URL and optional API key, without saving. */
+export function fetchLLMModels(value: LLMModelsInput): Promise<LLMTestResult> {
+  return post<LLMTestResult>("/api/settings/llm/models", value);
 }
 
 /** Test a candidate configuration (including an unsaved API key). */

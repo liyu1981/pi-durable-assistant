@@ -62,9 +62,6 @@ func mergeLLM(current settings.Config, body map[string]any) (settings.Config, er
 			return current, err
 		}
 	}
-	if err := next.Validate(); err != nil {
-		return current, badRequest("%s", err.Error())
-	}
 	return next, nil
 }
 
@@ -83,6 +80,10 @@ func (s *Server) putLLMSettings(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
+	if err := next.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := s.Runtime.ApplyLLM(r.Context(), next); err != nil {
 		handleError(w, fmt.Errorf("applying model settings: %w", err))
 		return
@@ -92,6 +93,29 @@ func (s *Server) putLLMSettings(w http.ResponseWriter, r *http.Request) {
 
 // testLLMSettings checks a candidate configuration without saving it. The
 // browser sends the whole form so the user can test before committing.
+// listLLMMModels discovers models from a candidate provider configuration.
+// Only the base URL and protocol are required; the API key is optional.
+func (s *Server) listLLMMModels(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r, 16_000)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	next, err := mergeLLM(s.Runtime.LLMConfig(), body)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	result, err := settings.ListModels(r.Context(), next)
+	if err != nil {
+		handleError(w, &httpError{status: http.StatusBadGateway, message: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "models": result.Models, "latencyMs": result.LatencyMS,
+	})
+}
+
 func (s *Server) testLLMSettings(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r, 16_000)
 	if err != nil {

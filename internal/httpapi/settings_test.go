@@ -1,9 +1,73 @@
 package httpapi
 
 import (
+	"context"
+	"fmt"
+	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"testing/fstest"
+
+	"github.com/liyu1981/pi-durable-assistant/internal/config"
+	"github.com/liyu1981/pi-durable-assistant/internal/runtime"
 )
+
+func newTestServerWithModels(t *testing.T, models string) *testClient {
+	t.Helper()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, models)
+	}))
+	t.Cleanup(provider.Close)
+	cfg := config.Config{
+		DataDir: t.TempDir(), Password: "secret",
+		API: "openai-completions", BaseURL: provider.URL + "/v1",
+		APIKey: "test-key", Model: "test-model",
+		ContextWindow: 128000, MaxTokens: 8192,
+	}
+	rt, err := runtime.Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html></html>")}}
+	server, err := NewServer(rt, fs.FS(assets))
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpServer := httptest.NewServer(server)
+	t.Cleanup(httpServer.Close)
+	return &testClient{t: t, base: httpServer.URL, client: &http.Client{}, confirmations: rt.Confirmations}
+}
+
+func TestLLMModelsRoute(t *testing.T) {
+	client := newTestServerWithModels(t, `{"data":[{"id":"gpt-4o-mini"},{"id":"gpt-4.1"}]}`)
+
+	// Only the base URL and an optional key are needed to discover models.
+	status, body := client.do("POST", "/api/settings/llm/models", map[string]any{
+		"apiKey": "candidate-key",
+	})
+	if status != http.StatusOK || body["ok"] != true {
+		t.Fatalf("models: %d %v", status, body)
+	}
+	models, ok := body["models"].([]any)
+	if !ok || len(models) != 2 {
+		t.Fatalf("models missing: %v", body)
+	}
+
+	// A blank key is allowed for local providers and no model is required.
+	status, body = client.do("POST", "/api/settings/llm/models", map[string]any{"apiKey": ""})
+	if status != http.StatusOK {
+		t.Fatalf("models without key: %d %v", status, body)
+	}
+	if body["apiKey"] != nil {
+		t.Fatalf("models response leaked a key: %v", body)
+	}
+
+	status, _ = client.do("POST", "/api/settings/llm/models", map[string]any{"baseURL": "not-a-url"})
+	if status != http.StatusBadGateway {
+		t.Fatalf("invalid base URL should fail: %d", status)
+	}
+}
 
 func TestLLMSettingsRoutes(t *testing.T) {
 	client := newTestServer(t)
