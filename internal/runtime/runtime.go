@@ -116,6 +116,14 @@ func buildProvider(cfg settings.Config) (*ai.ModelsProvider, error) {
 		},
 	}
 	key, base := cfg.APIKey, cfg.BaseURL
+	// PiG's direct API streams refuse to start without a non-empty key, even
+	// for local servers that need no authentication. Use a placeholder to pass
+	// that guard, then remove the auth headers so nothing is sent to the server.
+	var authHeaders ai.ProviderHeaders
+	if key == "" {
+		key = "local"
+		authHeaders = ai.ProviderHeaders{"Authorization": nil, "x-api-key": nil, "cf-aig-authorization": nil}
+	}
 	return ai.CreateProvider(ai.CreateProviderOptions{
 		ID:      settings.ProviderID,
 		Name:    stringPtr("Demo"),
@@ -123,11 +131,10 @@ func buildProvider(cfg settings.Config) (*ai.ModelsProvider, error) {
 		Auth: ai.ProviderAuth{APIKey: &ai.APIKeyAuth{
 			Name: "Provider API key",
 			Resolve: func(ctx context.Context, input ai.APIKeyAuthInput) (*ai.AuthResult, error) {
-				if key == "" {
-					return nil, nil
-				}
+				// A provider with no configured key is still usable: local servers
+				// accept the placeholder and ignore it.
 				return &ai.AuthResult{
-					Auth:   ai.ModelAuth{APIKey: key, BaseURL: base},
+					Auth:   ai.ModelAuth{APIKey: key, BaseURL: base, Headers: authHeaders},
 					Source: "settings", SourcePresent: true,
 				}, nil
 			},
@@ -196,7 +203,13 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		Models:   models,
 		Registry: registry,
 		OnReport: func(report durable.Report) {
-			fmt.Fprintln(os.Stderr, "Harness report:", RedactValue(redactor.get(), report.Error.Error()))
+			message := RedactValue(redactor.get(), report.Error.Error())
+			if strings.Contains(message, "Provider is not configured") || strings.Contains(message, "Unknown provider") {
+				message = "No model provider is configured; save a base URL and model in Settings > Models."
+			} else if strings.Contains(message, "No API key for provider") {
+				message = "The provider needs an API key; add one in Settings > Models."
+			}
+			fmt.Fprintln(os.Stderr, "Harness report:", message)
 		},
 	})
 	if err != nil {

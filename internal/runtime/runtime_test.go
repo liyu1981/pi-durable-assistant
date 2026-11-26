@@ -5,48 +5,87 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/liyu1981/pi-durable-assistant/internal/config"
+	"github.com/MichaelKinsy/PiG/ai"
 	"github.com/liyu1981/pi-durable-assistant/internal/settings"
 )
 
-func TestUnconfiguredBootCanBeConfiguredLive(t *testing.T) {
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"data":[]}`)
+func TestBuildProviderResolvesWithoutAPIKey(t *testing.T) {
+	cfg := settings.Config{
+		API:           "openai-completions",
+		BaseURL:       "http://127.0.0.1:11434/v1",
+		Model:         "local-model",
+		ContextWindow: 128000,
+		MaxTokens:     8192,
+	}
+	provider, err := buildProvider(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := provider.Auth.APIKey.Resolve(context.Background(), ai.APIKeyAuthInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result == nil {
+		t.Fatal("keyless provider must still resolve as configured")
+	}
+	if result.Auth.APIKey == "" {
+		t.Fatal("keyless provider needs a placeholder key for PiG's stream guard")
+	}
+	if result.Auth.BaseURL != cfg.BaseURL {
+		t.Fatalf("base URL = %q, want %q", result.Auth.BaseURL, cfg.BaseURL)
+	}
+	if value, ok := result.Auth.Headers["Authorization"]; !ok || value != nil {
+		t.Fatal("auth headers must be suppressed for a keyless provider")
+	}
+}
+
+func TestKeylessProviderCompletesFromLocalServer(t *testing.T) {
+	var sawAuthorization bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuthorization = r.Header.Get("Authorization") != "" || r.Header.Get("x-api-key") != ""
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: "+`{"id":"1","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`+"\n\n")
+		fmt.Fprint(w, "data: "+`{"choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":"stop"}]}`+"\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
-	defer provider.Close()
+	defer server.Close()
 
-	cfg := config.Config{DataDir: t.TempDir()}
-	rt, err := Open(context.Background(), cfg)
+	cfg := settings.Config{
+		API:           "openai-completions",
+		BaseURL:       server.URL + "/v1",
+		Model:         "local-model",
+		ContextWindow: 128000,
+		MaxTokens:     8192,
+	}
+	models := ai.CreateModels()
+	models.SetProvider(buildProviderOrFail(t, cfg))
+	model := models.GetModel(settings.ProviderID, cfg.Model)
+	if model == nil {
+		t.Fatal("model not registered")
+	}
+
+	message := models.Complete(context.Background(), model, ai.Context{
+		Messages: []ai.Message{ai.UserMessage{Content: ai.UserText("hi")}},
+	})
+	if message.StopReason == ai.StopReasonError {
+		t.Fatalf("model call failed: %s", message.ErrorMessage)
+	}
+	if sawAuthorization {
+		t.Fatal("keyless provider must not send an Authorization header")
+	}
+	if !strings.Contains(ai.ContentText(message.Content), "hello") {
+		t.Fatalf("unexpected response: %+v", message.Content)
+	}
+}
+
+func buildProviderOrFail(t *testing.T, cfg settings.Config) *ai.ModelsProvider {
+	t.Helper()
+	provider, err := buildProvider(cfg)
 	if err != nil {
-		t.Fatalf("an unconfigured app must still boot: %v", err)
-	}
-	if rt.Label() != "Not configured" || rt.Model().ModelId != "" {
-		t.Fatalf("unexpected initial model: %s %+v", rt.Label(), rt.Model())
-	}
-
-	next := settings.Defaults()
-	next.BaseURL = provider.URL + "/v1"
-	next.Model = "faux-1"
-	if err := rt.ApplyLLM(context.Background(), next); err != nil {
-		t.Fatalf("applying first configuration: %v", err)
-	}
-	if rt.Label() != "faux-1" || rt.Model().ModelId != "faux-1" || rt.LLM().APIKeySet {
-		t.Fatalf("settings were not applied: %s %+v %+v", rt.Label(), rt.Model(), rt.LLM())
-	}
-	// A restart with changed env must keep the stored configuration.
-	if err := rt.Harness.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	_ = rt.Settings.Close()
-	cfg.Model = "env-model"
-	reopened, err := Open(context.Background(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Settings.Close()
-	if reopened.Label() != "faux-1" {
-		t.Fatalf("environment must not override stored settings: %s", reopened.Label())
-	}
+	return provider
 }

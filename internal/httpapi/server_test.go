@@ -2,10 +2,27 @@ package httpapi
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/liyu1981/pi-durable-assistant/internal/config"
 )
+
+func TestFriendlyModelError(t *testing.T) {
+	for _, raw := range []string{
+		"Provider is not configured: demo",
+		"Unknown provider: demo",
+		"No API key for provider: demo",
+	} {
+		got := friendlyModelError(raw)
+		if !strings.Contains(got, "Settings > Models") {
+			t.Fatalf("%q translated to %q", raw, got)
+		}
+	}
+	if got := friendlyModelError("connection refused"); got != "connection refused" {
+		t.Fatalf("unrelated error changed: %q", got)
+	}
+}
 
 func TestAuthAndSameOrigin(t *testing.T) {
 	server := &Server{Config: config.Config{Password: "secret"}}

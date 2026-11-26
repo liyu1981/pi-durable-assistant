@@ -19,6 +19,20 @@ import (
 	"github.com/liyu1981/pi-durable-assistant/internal/tasks"
 )
 
+// friendlyModelError turns a raw provider error into an actionable message.
+// PiG names the internal provider id, which is meaningless to the user.
+func friendlyModelError(message string) string {
+	switch {
+	case strings.Contains(message, "Provider is not configured") ||
+		strings.Contains(message, "Unknown provider"):
+		return "No model provider is configured. Open Settings > Models, set the base URL and model, then save."
+	case strings.Contains(message, "No API key for provider"):
+		return "The provider needs an API key. Open Settings > Models and enter one, or use a local server that accepts an empty key."
+	default:
+		return message
+	}
+}
+
 type ToolCallView struct {
 	ID   any    `json:"id"`
 	Name string `json:"name"`
@@ -103,7 +117,7 @@ func simplifyView(ctx context.Context, server *Server, conversation harness.Conv
 			}
 			item := EntryView{ID: int64(entry.Id), Kind: "assistant", Text: sb.String(), ToolCalls: calls}
 			if typed.StopReason == ai.StopReasonError {
-				item.Error = server.Config.Redact(typed.ErrorMessage)
+				item.Error = friendlyModelError(server.Config.Redact(typed.ErrorMessage))
 			}
 			payload.Entries = append(payload.Entries, item)
 		case ai.ToolResultMessage:
