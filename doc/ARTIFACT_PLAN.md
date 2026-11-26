@@ -1,6 +1,6 @@
 # Artifact subsystem plan
 
-Status: proposed. No implementation yet (`do not code` phase).
+Status: implemented (Go backend + REST API; agent tools + HITL confirmations).
 
 ## 1. Concept
 
@@ -43,6 +43,19 @@ Cleanup granularity is artifact-level (LRU eviction of whole artifacts).
 - Storage layout: filesystem under `DATA_DIR` (e.g. `artifacts/<artifactID>/...`) plus metadata, or durable-store-backed — decision pending.
 - Cleanup: background sweeper + lazy check on access/write.
 - Tests: tool flows, LRU eviction, pinned exemption, size accounting, HITL gate.
+
+## 6b. API surface
+
+- `GET /api/artifacts` — list all artifacts.
+- `POST /api/artifacts` — create a new artifact.
+- `GET /api/artifacts/{id}` — get one artifact.
+- `DELETE /api/artifacts/{id}` — delete an artifact.
+- `PUT /api/artifacts/{id}/pin|unpin` — user-initiated pin/unpin.
+- `GET /api/artifacts/{id}/files` — list artifact files.
+- `GET /api/artifacts/{id}/files/{path...}` — read a file.
+- `PUT /api/artifacts/{id}/files/{path...}` — create/update a file (`{"content":"..."}`).
+- `GET /api/artifacts/confirmations` — list pin/unpin requests.
+- `POST /api/artifacts/confirmations/{id}/{approve|reject}` — human decision (applies pin/unpin on approval).
 
 ## 7. Decisions made
 

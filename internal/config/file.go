@@ -86,6 +86,11 @@ OBSIDIAN_ROOT=
 # Comma-separated folder allow list inside the vault.
 OBSIDIAN_ALLOW=AI Learning, X Ideas, VPS Tutorials
 
+# ---------------------------------------------------------------- artifacts
+# Global size limit for unpinned artifact content. Pinned artifacts are exempt
+# from cleanup and do not count towards this limit. Accepts bytes or KB/MB/GB.
+ARTIFACT_MAX_TOTAL_BYTES=4GB
+
 # ---------------------------------------------------------------- development
 # Development mode: bind 0.0.0.0:3111 and force HTTPS.
 # DEV=1

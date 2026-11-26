@@ -278,6 +278,32 @@ func TestArtifactsRoutes(t *testing.T) {
 	}
 }
 
+func TestArtifactFileRoutes(t *testing.T) {
+	client := newTestServer(t)
+	status, body := client.do("POST", "/api/artifacts", nil)
+	if status != http.StatusCreated {
+		t.Fatalf("create artifact: %d %v", status, body)
+	}
+	artifactID := body["artifact"].(map[string]any)["id"].(string)
+
+	status, body = client.do("PUT", "/api/artifacts/"+artifactID+"/files/reports/summary.md", map[string]any{"content": "hello"})
+	if status != http.StatusOK {
+		t.Fatalf("write artifact file: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/artifacts/"+artifactID+"/files/reports/summary.md", nil)
+	if status != http.StatusOK || body["content"] != "hello" {
+		t.Fatalf("read artifact file: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/artifacts/"+artifactID+"/files", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list artifact files: %d %v", status, body)
+	}
+	files, ok := body["files"].([]any)
+	if !ok || len(files) != 1 {
+		t.Fatalf("list artifact files missing: %v", body)
+	}
+}
+
 func TestV3ManagementRoutes(t *testing.T) {
 	client := newTestServer(t)
 	id := client.createConversation()

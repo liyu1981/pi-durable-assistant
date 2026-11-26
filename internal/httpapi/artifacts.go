@@ -111,6 +111,56 @@ func (s *Server) unpinArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"artifact": artifactView(updated)})
 }
 
+// listArtifactFiles lists the files in one artifact.
+func (s *Server) listArtifactFiles(w http.ResponseWriter, r *http.Request) {
+	files, err := s.Runtime.Artifacts.ListFiles(r.Context(), r.PathValue("id"))
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(files))
+	for _, file := range files {
+		items = append(items, map[string]any{
+			"path": file.Path, "sizeBytes": file.SizeBytes, "updatedAt": file.UpdatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": items})
+}
+
+// readArtifactFile reads one file from an artifact by path.
+func (s *Server) readArtifactFile(w http.ResponseWriter, r *http.Request) {
+	data, ok, err := s.Runtime.Artifacts.ReadFile(r.Context(), r.PathValue("id"), r.PathValue("path"))
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "artifact file not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"content": string(data)})
+}
+
+// writeArtifactFile creates or updates one file in an artifact by path.
+func (s *Server) writeArtifactFile(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r, 4*1024*1024)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	content, ok := body["content"].(string)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "content must be a string")
+		return
+	}
+	artifact, err := s.Runtime.Artifacts.WriteFile(r.Context(), r.PathValue("id"), r.PathValue("path"), []byte(content))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"artifact": artifactView(artifact)})
+}
+
 // listArtifactConfirmations returns pending and resolved pin/unpin requests.
 func (s *Server) listArtifactConfirmations(w http.ResponseWriter, r *http.Request) {
 	items, err := s.Runtime.Confirmations.List(r.Context())
