@@ -391,7 +391,7 @@ export function App() {
         </Alert>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {mobileNav ? (
           <button
             type="button"
