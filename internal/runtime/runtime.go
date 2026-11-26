@@ -176,6 +176,9 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 	redactor := &secretHolder{value: stored.APIKey}
 	registry := harness.CreateRegistry()
 	artifactsStore := artifacts.NewStore(filepath.Join(cfg.DataDir, "artifacts"))
+	if _, err := artifactsStore.SweepIfNeeded(ctx); err != nil {
+		return nil, err
+	}
 	if err := registry.Install(artifacts.Extension(artifactsStore)); err != nil {
 		return nil, err
 	}

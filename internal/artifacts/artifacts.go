@@ -118,6 +118,13 @@ func (s *Store) WriteFile(ctx context.Context, artifactID string, path string, c
 	if err := s.writeArtifactMeta(artifactID, artifact); err != nil {
 		return nil, err
 	}
+	limit, err := ConfiguredMaxTotalBytes()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.sweepLocked(limit); err != nil {
+		return nil, err
+	}
 	return artifact, nil
 }
 
@@ -133,6 +140,7 @@ func (s *Store) ReadFile(ctx context.Context, artifactID string, path string) ([
 		}
 		return nil, false, err
 	}
+	_ = s.touchLocked(artifactID)
 	return data, true, nil
 }
 
@@ -151,6 +159,10 @@ func (s *Store) DeleteArtifact(ctx context.Context, artifactID string) error {
 func (s *Store) ListArtifacts(ctx context.Context) ([]*Artifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.listArtifactsLocked()
+}
+
+func (s *Store) listArtifactsLocked() ([]*Artifact, error) {
 	entries, err := os.ReadDir(s.root)
 	if err != nil {
 		if os.IsNotExist(err) {
