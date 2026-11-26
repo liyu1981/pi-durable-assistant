@@ -207,6 +207,56 @@ func TestToolsRoute(t *testing.T) {
 	}
 }
 
+func TestArtifactsRoutes(t *testing.T) {
+	client := newTestServer(t)
+
+	status, body := client.do("POST", "/api/artifacts", nil)
+	if status != http.StatusCreated {
+		t.Fatalf("create artifact: %d %v", status, body)
+	}
+	created, ok := body["artifact"].(map[string]any)
+	if !ok {
+		t.Fatalf("create artifact body missing artifact: %v", body)
+	}
+	artifactID, _ := created["id"].(string)
+	if artifactID == "" {
+		t.Fatalf("create artifact missing id: %v", body)
+	}
+
+	status, body = client.do("GET", "/api/artifacts/"+artifactID, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get artifact: %d %v", status, body)
+	}
+	if got := body["artifact"].(map[string]any)["id"].(string); got != artifactID {
+		t.Fatalf("get artifact mismatch: %v", body)
+	}
+
+	status, body = client.do("PUT", "/api/artifacts/"+artifactID+"/pin", nil)
+	if status != http.StatusOK {
+		t.Fatalf("pin artifact: %d %v", status, body)
+	}
+	if got := body["artifact"].(map[string]any)["pinned"].(bool); !got {
+		t.Fatalf("pin artifact: %v", body)
+	}
+
+	status, body = client.do("PUT", "/api/artifacts/"+artifactID+"/unpin", nil)
+	if status != http.StatusOK {
+		t.Fatalf("unpin artifact: %d %v", status, body)
+	}
+	if got := body["artifact"].(map[string]any)["pinned"].(bool); got {
+		t.Fatalf("unpin artifact: %v", body)
+	}
+
+	status, body = client.do("GET", "/api/artifacts", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list artifacts: %d %v", status, body)
+	}
+	items, ok := body["artifacts"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("list artifacts missing: %v", body)
+	}
+}
+
 func TestV3ManagementRoutes(t *testing.T) {
 	client := newTestServer(t)
 	id := client.createConversation()

@@ -238,6 +238,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		Models:     models,
 		Settings:   store,
 		Registry:   registry,
+		Artifacts:  artifactsStore,
 		llm:        stored,
 		modelRef:   model,
 		modelLabel: label,

@@ -72,6 +72,12 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("GET /api/tools", server.listTools)
 	mux.HandleFunc("GET /api/knowledge/search", server.searchKnowledge)
 	mux.HandleFunc("GET /api/knowledge/read", server.readKnowledge)
+	mux.HandleFunc("GET /api/artifacts", server.listArtifacts)
+	mux.HandleFunc("POST /api/artifacts", server.createArtifact)
+	mux.HandleFunc("GET /api/artifacts/{id}", server.getArtifact)
+	mux.HandleFunc("DELETE /api/artifacts/{id}", server.deleteArtifact)
+	mux.HandleFunc("PUT /api/artifacts/{id}/pin", server.pinArtifact)
+	mux.HandleFunc("PUT /api/artifacts/{id}/unpin", server.unpinArtifact)
 	server.handler = server.middleware(mux)
 	return server, nil
 }

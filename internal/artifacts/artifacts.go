@@ -87,13 +87,11 @@ func (s *Store) loadArtifact(id string) (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	var meta struct {
-		Artifact Artifact `json:"artifact"`
-	}
-	if err := json.Unmarshal(data, &meta); err != nil {
+	var artifact Artifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
 		return nil, err
 	}
-	return &meta.Artifact, nil
+	return &artifact, nil
 }
 
 // WriteFile creates or updates a file inside an artifact and refreshes the
