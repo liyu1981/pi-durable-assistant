@@ -346,12 +346,12 @@ export function App() {
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-sm"
             className="hidden md:inline-flex"
+            aria-label="System settings"
             onClick={() => setSystemSettingsOpen(true)}
           >
             <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-            System settings
           </Button>
         </nav>
       </header>
