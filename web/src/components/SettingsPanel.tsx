@@ -4,6 +4,14 @@ import { useAtomValue, useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -274,20 +282,29 @@ export function SettingsPanel() {
             </Field>
             <Field label="Model">
               <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <Input
-                    value={form.model}
-                    list="llm-model-options"
-                    placeholder="gpt-4o-mini"
-                    onChange={(event) => update("model", event.target.value)}
+                <Combobox
+                  items={models}
+                  value={form.model}
+                  onValueChange={(value) => value && update("model", value)}
+                  inputValue={form.model}
+                  onInputValueChange={(value) => update("model", value)}
+                >
+                  <ComboboxInput
+                    className="w-full"
+                    placeholder="Type a model or choose from the list"
                     spellCheck={false}
                   />
-                  <datalist id="llm-model-options">
-                    {models.map((model) => (
-                      <option key={model} value={model} />
-                    ))}
-                  </datalist>
-                </div>
+                  <ComboboxContent className="min-w-0">
+                    <ComboboxList>
+                      {models.map((model) => (
+                        <ComboboxItem key={model} value={model}>
+                          {model}
+                        </ComboboxItem>
+                      ))}
+                      <ComboboxEmpty>No models match your search.</ComboboxEmpty>
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
                 <Button
                   type="button"
                   variant="outline"
