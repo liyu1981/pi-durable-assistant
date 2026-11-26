@@ -52,14 +52,14 @@ export function SystemSettingsDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="top-0! left-0! flex! h-dvh! w-screen! max-w-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden rounded-none! p-0 md:top-1/2! md:left-1/2! md:h-[min(88vh,900px)]! md:w-[min(1100px,94vw)]! md:-translate-x-1/2! md:-translate-y-1/2! md:rounded-4xl!">
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 md:px-6 md:py-4">
-          <DialogTitle className="sr-only">System settings</DialogTitle>
-          <DialogDescription className="sr-only">
-            Manage the model provider and read about this installation.
-          </DialogDescription>
+        <DialogHeader className="flex shrink-0 flex-row items-center gap-3 border-b border-border px-4 py-3 md:px-6 md:py-4">
           <span className="grid size-8 place-items-center rounded-xl bg-primary text-primary-foreground">
             <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
           </span>
+          <DialogTitle className="text-lg font-semibold">Setting</DialogTitle>
+          <DialogDescription className="sr-only">
+            Manage the model provider and read about this installation.
+          </DialogDescription>
         </DialogHeader>
         <Tabs
           defaultValue="models"
