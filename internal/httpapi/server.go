@@ -78,6 +78,8 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("DELETE /api/artifacts/{id}", server.deleteArtifact)
 	mux.HandleFunc("PUT /api/artifacts/{id}/pin", server.pinArtifact)
 	mux.HandleFunc("PUT /api/artifacts/{id}/unpin", server.unpinArtifact)
+	mux.HandleFunc("GET /api/artifacts/confirmations", server.listArtifactConfirmations)
+	mux.HandleFunc("POST /api/artifacts/confirmations/{id}/{decision}", server.decideArtifactConfirmation)
 	server.handler = server.middleware(mux)
 	return server, nil
 }

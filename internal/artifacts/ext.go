@@ -15,7 +15,7 @@ func artifactTextResult(value string) durable.ToolExecutionResult {
 }
 
 // Extension exposes the artifact file subsystem to the agent as tools.
-func Extension(store *Store) *durable.Extension {
+func Extension(store *Store, confirmations *ConfirmationStore) *durable.Extension {
 	return harness.DefineExtension(durable.Extension{
 		Name: "artifacts",
 		Tools: []*durable.ToolRegistration{
@@ -142,6 +142,56 @@ func Extension(store *Store) *durable.Extension {
 					return artifactTextResult(strings.Join(lines, "\n")), nil
 				},
 			}),
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
+					Name:        "artifact_request_pin",
+					Description: "Request human confirmation to pin an artifact so cleanup never removes it",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"artifactId": map[string]any{"type": "string"},
+							"context":    map[string]any{"type": "string"},
+						},
+						"required": []any{"artifactId"},
+					},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					return proposeArtifactConfirmation(ctx, args, confirmations, "pin"), nil
+				},
+			}),
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
+					Name:        "artifact_request_unpin",
+					Description: "Request human confirmation to unpin an artifact so normal cleanup applies again",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"artifactId": map[string]any{"type": "string"},
+							"context":    map[string]any{"type": "string"},
+						},
+						"required": []any{"artifactId"},
+					},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					return proposeArtifactConfirmation(ctx, args, confirmations, "unpin"), nil
+				},
+			}),
 		},
 	})
+}
+
+func proposeArtifactConfirmation(ctx context.Context, args any, confirmations *ConfirmationStore, action string) durable.ToolExecutionResult {
+	input, _ := args.(map[string]any)
+	artifactID, _ := input["artifactId"].(string)
+	contextText, _ := input["context"].(string)
+	if artifactID == "" {
+		return artifactTextResult("confirmation requires an artifactId")
+	}
+	item, err := confirmations.Propose(ctx, artifactID, action, contextText)
+	if err != nil {
+		return artifactTextResult(fmt.Sprintf("failed to request %s confirmation: %v", action, err))
+	}
+	return artifactTextResult(fmt.Sprintf("requested %s for artifact %s; confirmation %s is pending human approval", action, artifactID, item.ID))
 }

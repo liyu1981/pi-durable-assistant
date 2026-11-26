@@ -111,6 +111,49 @@ func (s *Server) unpinArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"artifact": artifactView(updated)})
 }
 
+// listArtifactConfirmations returns pending and resolved pin/unpin requests.
+func (s *Server) listArtifactConfirmations(w http.ResponseWriter, r *http.Request) {
+	items, err := s.Runtime.Confirmations.List(r.Context())
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"confirmations": items})
+}
+
+// decideArtifactConfirmation approves or rejects a pending agent request.
+// On approval the pin/unpin action is applied to the artifact.
+func (s *Server) decideArtifactConfirmation(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	decision := r.PathValue("decision")
+	status := ""
+	switch decision {
+	case "approve":
+		status = "approved"
+	case "reject":
+		status = "rejected"
+	default:
+		writeError(w, http.StatusNotFound, "route not found")
+		return
+	}
+	item, err := s.Runtime.Confirmations.Resolve(r.Context(), id, status)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if item == nil {
+		writeError(w, http.StatusNotFound, "confirmation not found")
+		return
+	}
+	if status == "approved" {
+		if err := s.Runtime.Artifacts.SetPinned(r.Context(), item.ArtifactID, item.Action == "pin"); err != nil {
+			handleError(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"confirmation": item})
+}
+
 func (s *Server) findArtifact(ctx context.Context, id string) (*artifacts.Artifact, error) {
 	artifacts, err := s.Runtime.Artifacts.ListArtifacts(ctx)
 	if err != nil {

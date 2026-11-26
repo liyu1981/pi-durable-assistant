@@ -35,6 +35,8 @@ type Runtime struct {
 	Registry harness.RegistryReader
 	// Artifacts is the durable file subsystem the agent works through.
 	Artifacts *artifacts.Store
+	// Confirmations holds pending human-in-the-loop requests from agent tools.
+	Confirmations *artifacts.ConfirmationStore
 
 	mu         sync.RWMutex
 	llm        settings.Config
@@ -179,7 +181,8 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 	if _, err := artifactsStore.SweepIfNeeded(ctx); err != nil {
 		return nil, err
 	}
-	if err := registry.Install(artifacts.Extension(artifactsStore)); err != nil {
+	confirmationStore := artifacts.NewConfirmationStore(filepath.Join(cfg.DataDir, "artifact-confirmations.json"))
+	if err := registry.Install(artifacts.Extension(artifactsStore, confirmationStore)); err != nil {
 		return nil, err
 	}
 	for _, extension := range []*durable.Extension{
@@ -235,17 +238,18 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		return nil, err
 	}
 	rt := &Runtime{
-		Config:     cfg,
-		Harness:    harnessInstance,
-		Root:       root,
-		Models:     models,
-		Settings:   store,
-		Registry:   registry,
-		Artifacts:  artifactsStore,
-		llm:        stored,
-		modelRef:   model,
-		modelLabel: label,
-		redactor:   redactor,
+		Config:        cfg,
+		Harness:       harnessInstance,
+		Root:          root,
+		Models:        models,
+		Settings:      store,
+		Registry:      registry,
+		Artifacts:     artifactsStore,
+		Confirmations: confirmationStore,
+		llm:           stored,
+		modelRef:      model,
+		modelLabel:    label,
+		redactor:      redactor,
 	}
 	harnessInstance.Resume()
 	return rt, nil

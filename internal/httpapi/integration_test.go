@@ -12,14 +12,16 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/liyu1981/pi-durable-assistant/internal/artifacts"
 	"github.com/liyu1981/pi-durable-assistant/internal/config"
 	"github.com/liyu1981/pi-durable-assistant/internal/runtime"
 )
 
 type testClient struct {
-	t      *testing.T
-	base   string
-	client *http.Client
+	t             *testing.T
+	base          string
+	client        *http.Client
+	confirmations *artifacts.ConfirmationStore
 }
 
 func newTestServer(t *testing.T) *testClient {
@@ -50,7 +52,7 @@ func newTestServer(t *testing.T) *testClient {
 	httpServer := httptest.NewServer(server)
 	t.Cleanup(httpServer.Close)
 	client := &http.Client{}
-	return &testClient{t: t, base: httpServer.URL, client: client}
+	return &testClient{t: t, base: httpServer.URL, client: client, confirmations: rt.Confirmations}
 }
 
 func (c *testClient) do(method, path string, body any) (int, map[string]any) {
@@ -254,6 +256,25 @@ func TestArtifactsRoutes(t *testing.T) {
 	items, ok := body["artifacts"].([]any)
 	if !ok || len(items) == 0 {
 		t.Fatalf("list artifacts missing: %v", body)
+	}
+
+	// A pin request proposed by the agent stays pending until a human approves.
+	confirmation, err := client.confirmations.Propose(context.Background(), artifactID, "pin", "agent request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body = client.do("GET", "/api/artifacts/"+artifactID, nil)
+	if got := body["artifact"].(map[string]any)["pinned"].(bool); got {
+		t.Fatalf("artifact pinned without human approval: %v", body)
+	}
+
+	status, body = client.do("POST", "/api/artifacts/confirmations/"+confirmation.ID+"/approve", nil)
+	if status != http.StatusOK {
+		t.Fatalf("approve confirmation: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/artifacts/"+artifactID, nil)
+	if !body["artifact"].(map[string]any)["pinned"].(bool) {
+		t.Fatalf("artifact not pinned after approval: %v", body)
 	}
 }
 
