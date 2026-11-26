@@ -12,7 +12,7 @@ The agent gets a durable, file-oriented subsystem it can use as workspace storag
 
 ## 2. Data model
 
-- `Artifact`: ID, conversation scope, created/updated timestamps, pinned flag, size in bytes.
+- `Artifact`: ID, global namespace, created/updated timestamps, pinned flag, size in bytes.
 - `ArtifactFile`: artifact ID + path (+ content, size, updated timestamp); nested paths supported, root folder belongs to the artifact.
 
 Cleanup granularity is artifact-level (LRU eviction of whole artifacts).
@@ -22,12 +22,12 @@ Cleanup granularity is artifact-level (LRU eviction of whole artifacts).
 - `artifact_create` / new-artifact allocation → returns fresh artifact ID.
 - `artifact_write` (artifactId, path, content) → create or update file; recomputes artifact size/updated-at.
 - `artifact_read` (artifactId, path) → read file content.
-- `artifact_list` → list artifacts/files visible to the conversation.
-- `artifact_pin` / `artifact_unpin` (artifactId) → pin/unpin. Agent-initiated calls require human-in-the-loop confirmation (see §5).
+- `artifact_list` → list artifacts/files in the global namespace.
+- `artifact_request_pin` / `artifact_request_unpin` (artifactId) → propose pin/unpin; require human-in-the-loop confirmation (see §5). User-initiated pin/unpin is via REST.
 
 ## 4. Cleanup policy
 
-- Global configurable total size limit (`ARTIFACT_MAX_TOTAL_BYTES` via env / `pida.env` / settings UI); decided default **4GB**.
+- Global configurable total size limit (`ARTIFACT_MAX_TOTAL_BYTES` via env / `pida.env`); decided default **4GB**.
 - LRU: per-artifact last-used tracking (read/write/access). When unpinned artifacts exceed the limit, evict least-recently-used unpinned artifacts until under the cap.
 - Pinned artifacts are exempt from cleanup and excluded from the size accounting.
 
@@ -37,12 +37,12 @@ Cleanup granularity is artifact-level (LRU eviction of whole artifacts).
 - Direct pin/unpin via API/UI is allowed (user-initiated).
 - Agent-initiated pin/unpin goes through a pending human confirmation: the agent tool records a pending action (artifactId, action, context); the user confirms via API/UI; the system then applies the pin/unpin. Audit logged.
 
-## 6. Integration notes (for the later implementation phase)
+## 6. Integration notes (implemented)
 
 - Wire into serve/runtime and harness tool registry alongside existing tools.
-- Storage layout: filesystem under `DATA_DIR` (e.g. `artifacts/<artifactID>/...`) plus metadata, or durable-store-backed — decision pending.
-- Cleanup: background sweeper + lazy check on access/write.
-- Tests: tool flows, LRU eviction, pinned exemption, size accounting, HITL gate.
+- Storage layout: implemented as filesystem under `DATA_DIR/artifacts/<artifactID>/...` plus JSON metadata.
+- Cleanup: lazy check on write and on boot; reads refresh LRU timestamps.
+- Tests: store lifecycle, LRU eviction, pinned exemption, size accounting, HITL gate, REST routes.
 
 ## 6b. API surface
 
@@ -62,4 +62,4 @@ Cleanup granularity is artifact-level (LRU eviction of whole artifacts).
 - Artifact namespace: **global**.
 - LRU unit: **artifact granularity** (evict whole artifacts, LRU by last use).
 - Default global size limit: **4GB** (`ARTIFACT_MAX_TOTAL_BYTES=4GB`).
-- Pending-confirmation store for the HITL gate: **dedicated store**.
+- Pending-confirmation store for the HITL gate: **dedicated store** (`DATA_DIR/artifact-confirmations.json`).

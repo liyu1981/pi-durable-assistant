@@ -22,6 +22,7 @@ type Confirmation struct {
 	Status     string     `json:"status"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+	ResolvedBy string     `json:"resolvedBy,omitempty"`
 }
 
 // ConfirmationStore persists pending confirmation requests in a dedicated
@@ -122,7 +123,7 @@ func (c *ConfirmationStore) Get(ctx context.Context, id string) (*Confirmation, 
 }
 
 // Resolve approves or rejects a pending confirmation.
-func (c *ConfirmationStore) Resolve(ctx context.Context, id, status string) (*Confirmation, error) {
+func (c *ConfirmationStore) Resolve(ctx context.Context, id, status, resolvedBy string) (*Confirmation, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if status != "approved" && status != "rejected" {
@@ -142,6 +143,7 @@ func (c *ConfirmationStore) Resolve(ctx context.Context, id, status string) (*Co
 		item.Status = status
 		now := time.Now().UTC()
 		item.ResolvedAt = &now
+		item.ResolvedBy = resolvedBy
 		if err := c.saveLocked(items); err != nil {
 			return nil, err
 		}

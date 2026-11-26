@@ -263,6 +263,14 @@ func TestArtifactsRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	status, body = client.do("GET", "/api/artifacts/confirmations", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list confirmations: %d %v", status, body)
+	}
+	pending, ok := body["confirmations"].([]any)
+	if !ok || len(pending) != 1 {
+		t.Fatalf("pending confirmation missing: %v", body)
+	}
 	status, body = client.do("GET", "/api/artifacts/"+artifactID, nil)
 	if got := body["artifact"].(map[string]any)["pinned"].(bool); got {
 		t.Fatalf("artifact pinned without human approval: %v", body)

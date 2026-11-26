@@ -186,7 +186,7 @@ func (s *Server) decideArtifactConfirmation(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "route not found")
 		return
 	}
-	item, err := s.Runtime.Confirmations.Resolve(r.Context(), id, status)
+	item, err := s.Runtime.Confirmations.Resolve(r.Context(), id, status, "user")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

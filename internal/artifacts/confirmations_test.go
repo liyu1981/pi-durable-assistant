@@ -29,14 +29,14 @@ func TestConfirmationStoreLifecycle(t *testing.T) {
 		t.Fatalf("list: %d err=%v", len(listed), err)
 	}
 
-	resolved, err := store.Resolve(ctx, proposed.ID, "approved")
+	resolved, err := store.Resolve(ctx, proposed.ID, "approved", "tester")
 	if err != nil || resolved.Status != "approved" {
 		t.Fatalf("resolve: %+v err=%v", resolved, err)
 	}
-	if _, err := store.Resolve(ctx, proposed.ID, "rejected"); err == nil {
+	if _, err := store.Resolve(ctx, proposed.ID, "rejected", "tester"); err == nil {
 		t.Fatal("resolving twice should fail")
 	}
-	if _, err := store.Resolve(ctx, proposed.ID, "invalid"); err == nil {
+	if _, err := store.Resolve(ctx, proposed.ID, "invalid", "tester"); err == nil {
 		t.Fatal("invalid status should fail")
 	}
 	if _, err := store.Propose(ctx, "art_1", "bogus", ""); err == nil {
