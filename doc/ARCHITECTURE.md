@@ -8,7 +8,8 @@ This document describes how the current Go implementation actually works. Code r
 
 1. `main.go` loads configuration (`internal/config/config.go`) and starts the HTTP/HTTPS listeners.
 2. `runtime.Open` (`internal/runtime/runtime.go`) creates the runtime:
-   - `createModels` builds a PiG `ai.Models` catalog with a single model/provider from `LLM_API`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_CONTEXT_WINDOW`, and `LLM_MAX_TOKENS`. Supported wire protocols are `openai-completions`, `openai-responses`, and `anthropic-messages`.
+   - `internal/settings.Open` opens `DATA_DIR/agent.sqlite`, applies pending app migrations, and loads the single `app_llm_config` row. A new database is seeded from the legacy `LLM_*` environment variables; afterwards SQLite is authoritative and the environment is ignored until that row is reset.
+   - `createModels` builds a PiG `ai.Models` catalog with one provider (`demo`) from the stored settings. Supported wire protocols are `openai-completions`, `openai-responses`, and `anthropic-messages`. `Runtime.ApplyLLM` replaces that provider in place when the user saves settings, so no restart is needed.
    - `node.OpenNodeSqliteStorage(DATA_DIR/agent.sqlite, ...)` opens the durable store.
    - `harness.CreateRegistry()` installs four extensions: `tools.Assistant`, `tools.Delegate`, `personal.Extension`, and `knowledge.Extension`.
    - `harness.OpenHarness(ctx, storage, options)` creates the durable harness with those models and the registry.
@@ -95,6 +96,12 @@ All general-purpose tools are marked `Replay: durable.ReplaySafe`. Tool writes h
 
 All durable state lives in one SQLite file: `DATA_DIR/agent.sqlite` (`/data/agent.sqlite` in Docker). PiG opens it with `modernc.org/sqlite` (pure Go, no cgo), WAL mode, `synchronous=NORMAL`, and a 5-second busy timeout. There is no external database server.
 
+### Application tables and migrations
+
+`internal/settings` opens the same database with its own `database/sql` connection (WAL allows both pools) for tables the app owns, currently `app_llm_config`: one row holding the UI-configured provider, base URL, API key (stored in the local database, never returned by the API), model ID, context window and max tokens.
+
+Migrations are an ordered list in `internal/settings/store.go`, tracked in SQLite's `user_version`. Each step runs in a transaction that also records the version, so an interrupted step is retried on the next start. A database written by a newer build is refused rather than downgraded. Add new steps at the end; never edit a shipped one.
+
 ### Durable records
 
 PiG stores these record families in SQLite:
@@ -180,6 +187,8 @@ flowchart TB
 | --- | --- |
 | Process start and listener modes | `main.go`, `internal/config/config.go` |
 | Runtime bootstrap and harness | `internal/runtime/runtime.go` |
+| Stored model settings, migrations, provider probe | `internal/settings/*` |
+| Global settings dialog (Models / About tabs) | `web/src/components/SystemSettingsDialog.tsx` |
 | HTTP routes, auth, SSE, static/PWA assets | `internal/httpapi/*` |
 | Tool definitions and delegation | `internal/tools/tools.go` |
 | Reminder/schedule/background tasks | `internal/tasks/tasks.go` |

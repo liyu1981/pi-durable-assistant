@@ -4,6 +4,7 @@ package httpapi
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"runtime/debug"
 	"errors"
 	"fmt"
 	"io"
@@ -39,10 +40,13 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 		Runtime: rt, Config: rt.Config, Assets: assets,
 		StartedAt: time.Now().UTC().Format(time.RFC3339),
 	}
-	redactHook = rt.Config.Redact
+	redactHook = rt.Redact
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.serveStatic)
 	mux.HandleFunc("GET /api/info", server.info)
+	mux.HandleFunc("GET /api/settings/llm", server.getLLMSettings)
+	mux.HandleFunc("PUT /api/settings/llm", server.putLLMSettings)
+	mux.HandleFunc("POST /api/settings/llm/test", server.testLLMSettings)
 	mux.HandleFunc("GET /api/crash", server.notFound)
 	mux.HandleFunc("POST /api/crash", server.crash)
 	mux.HandleFunc("GET /api/conversations", server.listConversations)
@@ -81,7 +85,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				fmt.Fprintln(os.Stderr, "request failed:", s.Config.Redact(fmt.Sprint(recovered)))
+				fmt.Fprintf(os.Stderr, "request failed: %s\n%s\n", s.Runtime.Redact(fmt.Sprint(recovered)), debug.Stack())
 				writeError(w, http.StatusInternalServerError, "server error; see server logs")
 			}
 		}()
@@ -189,7 +193,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		boots = meta.Boots
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"model": s.Runtime.ModelLabel, "api": s.Config.API, "pid": os.Getpid(),
+		"model": s.Runtime.Label(), "api": s.Runtime.LLM().API, "pid": os.Getpid(),
 		"startedAt": s.StartedAt, "boots": boots,
 	})
 }

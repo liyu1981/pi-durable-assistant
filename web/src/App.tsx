@@ -40,6 +40,7 @@ import {
   rightPanelCollapsedAtom,
   serverInfoAtom,
   sseStatusAtom,
+  systemSettingsOpenAtom,
   viewAtom,
 } from "./atoms";
 import { ChatThread } from "./components/ChatThread";
@@ -47,6 +48,7 @@ import { Composer } from "./components/Composer";
 import { Drawer } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
 import { StatusPanel } from "./components/StatusPanel";
+import { SystemSettingsDialog } from "./components/SystemSettingsDialog";
 import { ToastContainer } from "./components/ToastContainer";
 import { useToast } from "./lib/useToast";
 
@@ -78,6 +80,7 @@ export function App() {
   const setFilter = useSetAtom(conversationFilterAtom);
   const setPendingRemove = useSetAtom(pendingRemoveAtom);
   const setDrawer = useSetAtom(drawerAtom);
+  const setSystemSettingsOpen = useSetAtom(systemSettingsOpenAtom);
   const conversations = useAtomValue(conversationsAtom);
   const view = useAtomValue(viewAtom);
   const sseStatus = useAtomValue(sseStatusAtom);
@@ -300,6 +303,10 @@ export function App() {
                 <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
                 Knowledge
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSystemSettingsOpen(true)}>
+                <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
+                System settings
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
@@ -336,6 +343,15 @@ export function App() {
           >
             <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
             Knowledge
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => setSystemSettingsOpen(true)}
+          >
+            <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
+            System settings
           </Button>
         </nav>
       </header>
@@ -467,6 +483,7 @@ export function App() {
       </div>
 
       <Drawer />
+      <SystemSettingsDialog />
       <ToastContainer />
     </div>
   );

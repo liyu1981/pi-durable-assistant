@@ -32,7 +32,9 @@ export function Drawer() {
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border">
           <SheetTitle>Management</SheetTitle>
-          <SheetDescription>Review schedules, memory, and the knowledge base.</SheetDescription>
+          <SheetDescription>
+            Review schedules, reminders, memory, and the knowledge base.
+          </SheetDescription>
         </SheetHeader>
         <Tabs
           value={drawer.panel}

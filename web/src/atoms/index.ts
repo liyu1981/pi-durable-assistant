@@ -49,6 +49,8 @@ export const knowledgePageAtom = atom<KnowledgePage | null>(null);
 export const leftPanelCollapsedAtom = atomWithStorage("pi.leftPanelCollapsed", false);
 export const rightPanelCollapsedAtom = atomWithStorage("pi.rightPanelCollapsed", false);
 
+export const systemSettingsOpenAtom = atom(false);
+
 export const drawerAtom = atom<{
   open: boolean;
   panel: "tasks" | "personal" | "knowledge" | "status";

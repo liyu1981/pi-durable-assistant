@@ -342,7 +342,7 @@ func registerConversation(title string, extra docs.IndexItem) func(tx durable.Tx
 func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 	conversation, err := s.Runtime.Harness.CreateConversation(r.Context(), harness.ConversationCreateOptions{
 		Ownership: durable.ConversationOwnership{Kind: durable.ConversationOwnerless},
-		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.ModelRef)},
+		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.Model())},
 		Init:      registerConversation("New conversation", docs.IndexItem{}),
 	})
 	if err != nil {
@@ -453,7 +453,7 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	forkAt := int64(entryIDValue)
 	fork, err := conversation.Fork(r.Context(), entryID, harness.ConversationCreateOptions{
 		Ownership: durable.ConversationOwnership{Kind: durable.ConversationOwnerless},
-		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.ModelRef)},
+		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.Model())},
 		Init:      registerConversation("Fork of "+parentTitle, docs.IndexItem{ForkOf: &parentID, ForkAtEntry: &forkAt}),
 	})
 	if err != nil {

@@ -291,7 +291,7 @@ func (s *Server) createBackground(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		item = docs.BackgroundItem{ID: uuid.NewString(), Text: text, Status: "running", CreatedAt: schedule.NowMillis()}
-		taskID, err := tasks.CreateBackgroundTask(tx, conversation.Id(), tasks.BackgroundInput{JobID: item.ID, Text: text, Model: s.Runtime.ModelRef})
+		taskID, err := tasks.CreateBackgroundTask(tx, conversation.Id(), tasks.BackgroundInput{JobID: item.ID, Text: text, Model: s.Runtime.Model()})
 		if err != nil {
 			return nil, err
 		}

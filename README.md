@@ -35,12 +35,16 @@ The deterministic local script (add todos, wait 10 seconds, complete todos, fina
 
 ## Connect a real model
 
-Create `.env` (do not commit) with `DEMO_PASSWORD`, `LLM_API` (`openai-completions`, `openai-responses`, `anthropic-messages`), `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`. Then:
+Build and start the server, then open **System settings** in the app header (or the tools menu on small screens) and choose the **Models** tab:
 
 ```bash
 pnpm build
 ./bin/pi-durable-assistant
 ```
+
+Pick a protocol (`openai-completions`, `openai-responses`, `anthropic-messages`), enter the base URL, model and optional API key, then use **Test connection** before **Save settings**. Changes are stored in the `app_llm_config` table of `DATA_DIR/agent.sqlite` and applied to the running server immediately; the stored key is never returned to the browser.
+
+For a brand-new database only, the legacy `LLM_API`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_CONTEXT_WINDOW` and `LLM_MAX_TOKENS` variables seed the first row (handy for `pnpm dev:demo`). Once the row exists, SQLite is authoritative and changing `.env` has no effect until that row is reset.
 
 With `DEMO_PASSWORD` set the server binds `0.0.0.0:3000`; without it, loopback only. Production requires a password.
 
@@ -59,7 +63,7 @@ The container publishes only `127.0.0.1:3300` by default. Use an HTTPS reverse p
 
 ## HTTP API
 
-`GET /api/info`, `GET|POST /api/conversations`, `GET /api/conversations/{id}/events` (SSE), `POST /api/conversations/{id}/{messages,fork,abort,archive,restore,remove}`, `GET /api/conversations/{id}/{management,export.md}`, `POST /api/conversations/{id}/{schedules,background}`, schedule/background/reminder management, `GET|POST /api/personal`, `GET /api/knowledge/{search,read}`, `POST /api/crash`. All endpoints use HTTP Basic Auth when a password is configured; writes require same-origin.
+`GET /api/info`, `GET|POST /api/conversations`, `GET /api/conversations/{id}/events` (SSE), `POST /api/conversations/{id}/{messages,fork,abort,archive,restore,remove}`, `GET /api/conversations/{id}/{management,export.md}`, `POST /api/conversations/{id}/{schedules,background}`, schedule/background/reminder management, `GET|POST /api/personal`, `GET /api/knowledge/{search,read}`, `GET|PUT /api/settings/llm`, `POST /api/settings/llm/test`, `POST /api/crash`. All endpoints use HTTP Basic Auth when a password is configured; writes require same-origin.
 
 WeChat is intentionally not part of this release. All source, UI text, and documentation are English-only.
 

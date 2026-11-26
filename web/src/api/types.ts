@@ -260,3 +260,30 @@ export interface MessagePayload {
 }
 
 export type SseStatus = "connecting" | "open" | "reconnecting" | "closed";
+
+/** Model configuration stored in SQLite. The API key is never returned by the server. */
+export interface LLMSettings {
+  api: string;
+  baseURL: string;
+  apiKeySet: boolean;
+  model: string;
+  contextWindow: number;
+  maxTokens: number;
+  updatedAt: string;
+}
+
+/** Fields accepted by the settings endpoints; omitting apiKey keeps the stored key. */
+export interface LLMSettingsInput {
+  api: string;
+  baseURL: string;
+  apiKey?: string;
+  model: string;
+  contextWindow: number;
+  maxTokens: number;
+}
+
+export interface LLMTestResult {
+  ok: boolean;
+  models: string[];
+  latencyMs: number;
+}

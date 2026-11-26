@@ -113,10 +113,10 @@ func main() {
 	}()
 
 	if plain != nil {
-		fmt.Printf("pi-durable-assistant started: http://%s, model %s, PID %d\n", plain.Addr, rt.ModelLabel, os.Getpid())
+		fmt.Printf("pi-durable-assistant started: http://%s, model %s, PID %d\n", plain.Addr, rt.Label(), os.Getpid())
 	}
 	if secure != nil {
-		fmt.Printf("pi-durable-assistant started: https://%s, model %s, PID %d\n", secure.Addr, rt.ModelLabel, os.Getpid())
+		fmt.Printf("pi-durable-assistant started: https://%s, model %s, PID %d\n", secure.Addr, rt.Label(), os.Getpid())
 	}
 
 	if plain != nil && secure != nil {

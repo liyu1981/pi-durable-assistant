@@ -1,4 +1,11 @@
-import type { MessagePayload, SseStatus, ViewPayload } from "./types";
+import type {
+  LLMSettings,
+  LLMSettingsInput,
+  LLMTestResult,
+  MessagePayload,
+  SseStatus,
+  ViewPayload,
+} from "./types";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -45,6 +52,24 @@ export function post<T>(path: string, body?: unknown): Promise<T> {
     method: "POST",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+export function put<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function getLLMSettings(): Promise<LLMSettings> {
+  return get<LLMSettings>("/api/settings/llm");
+}
+
+/** Save model settings; the change takes effect without a server restart. */
+export function saveLLMSettings(value: LLMSettingsInput): Promise<LLMSettings> {
+  return put<LLMSettings>("/api/settings/llm", value);
+}
+
+/** Test a candidate configuration (including an unsaved API key). */
+export function testLLMSettings(value: LLMSettingsInput): Promise<LLMTestResult> {
+  return post<LLMTestResult>("/api/settings/llm/test", value);
 }
 
 export function sendMessage(

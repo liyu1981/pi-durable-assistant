@@ -7,6 +7,7 @@ toolchain go1.27.4
 require (
 	github.com/MichaelKinsy/PiG v0.7.0
 	github.com/google/uuid v1.6.0
+	modernc.org/sqlite v1.53.0
 )
 
 require (
@@ -26,5 +27,4 @@ require (
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.53.0 // indirect
 )
