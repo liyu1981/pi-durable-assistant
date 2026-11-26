@@ -274,29 +274,20 @@ export function SettingsPanel() {
             </Field>
             <Field label="Model">
               <div className="flex flex-col gap-2">
-                <Input
-                  value={form.model}
-                  placeholder="gpt-4o-mini"
-                  onChange={(event) => update("model", event.target.value)}
-                  spellCheck={false}
-                />
-                {models.length > 0 ? (
-                  <Select
-                    value={models.includes(form.model) ? form.model : undefined}
-                    onValueChange={(value) => value && update("model", value)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a model returned by the provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {models.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
+                <div className="flex gap-2">
+                  <Input
+                    value={form.model}
+                    list="llm-model-options"
+                    placeholder="gpt-4o-mini"
+                    onChange={(event) => update("model", event.target.value)}
+                    spellCheck={false}
+                  />
+                  <datalist id="llm-model-options">
+                    {models.map((model) => (
+                      <option key={model} value={model} />
+                    ))}
+                  </datalist>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
