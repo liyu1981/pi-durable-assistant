@@ -71,6 +71,7 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("POST /api/personal/{kind}", server.postPersonal)
 	mux.HandleFunc("POST /api/personal/{kind}/{uuid}/{action}", server.decidePersonal)
 	mux.HandleFunc("GET /api/tools", server.listTools)
+	mux.HandleFunc("GET /api/system-prompt", server.getSystemPrompt)
 	mux.HandleFunc("GET /api/knowledge/search", server.searchKnowledge)
 	mux.HandleFunc("GET /api/knowledge/read", server.readKnowledge)
 	mux.HandleFunc("GET /api/artifacts", server.listArtifacts)

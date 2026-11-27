@@ -14,11 +14,13 @@ import { KnowledgePanel } from "./KnowledgePanel";
 import { MemoryPanel } from "./MemoryPanel";
 import { SkillsPanel } from "./SkillsPanel";
 import { StatusPanel } from "./StatusPanel";
+import { SystemPromptPanel } from "./SystemPromptPanel";
 import { TaskCenter } from "./TaskCenter";
 import { ToolsPanel } from "./ToolsPanel";
 
 const TABS: { key: DrawerPanel; label: string }[] = [
   { key: "status", label: "Status" },
+  { key: "system", label: "System" },
   { key: "tasks", label: "Tasks" },
   { key: "memory", label: "Memory" },
   { key: "skills", label: "Skills" },
@@ -62,6 +64,9 @@ export function Drawer() {
             <div className="flex flex-col gap-8 px-4 py-6">
               <TabsContent value="status" className="mt-0">
                 <StatusPanel className="w-full border-l-0 bg-transparent px-0" />
+              </TabsContent>
+              <TabsContent value="system" className="mt-0">
+                <SystemPromptPanel />
               </TabsContent>
               <TabsContent value="tasks" className="mt-0">
                 <TaskCenter />

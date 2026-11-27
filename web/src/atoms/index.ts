@@ -84,6 +84,7 @@ export type DrawerPanel =
   | "tools"
   | "knowledge"
   | "status"
+  | "system"
   | "artifacts";
 
 export const drawerAtom = atom<{

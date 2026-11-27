@@ -426,3 +426,17 @@ func TestV3ManagementRoutes(t *testing.T) {
 		t.Fatalf("missing reminder cancel must fail: %d", status)
 	}
 }
+
+func TestSystemPromptRoute(t *testing.T) {
+	client := newTestServer(t)
+	status, body := client.do("GET", "/api/system-prompt", nil)
+	if status != http.StatusOK {
+		t.Fatalf("system prompt: %d %v", status, body)
+	}
+	if _, ok := body["sections"].([]any); !ok {
+		t.Fatalf("system prompt sections missing: %v", body)
+	}
+	if _, ok := body["prompt"].(string); !ok {
+		t.Fatalf("system prompt text missing: %v", body)
+	}
+}

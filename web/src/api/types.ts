@@ -348,3 +348,14 @@ export interface ArtifactConfirmation {
 export interface ArtifactConfirmations {
   confirmations: ArtifactConfirmation[];
 }
+
+export interface SystemPromptSection {
+  name: string;
+  value: string;
+}
+
+export interface SystemPrompt {
+  conversationId: number;
+  sections: SystemPromptSection[];
+  prompt: string;
+}

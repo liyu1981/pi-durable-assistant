@@ -10,6 +10,7 @@ import type {
   LLMTestResult,
   MessagePayload,
   SseStatus,
+  SystemPrompt,
   ViewPayload,
 } from "./types";
 
@@ -163,6 +164,12 @@ export function subscribeView(
 }
 
 /** Artifact subsystem: folders of agent-managed files. */
+/** Current system prompt sections for a conversation (or the root agent). */
+export function getSystemPrompt(conversationId?: number | null): Promise<SystemPrompt> {
+  const query = conversationId ? `?conversation=${encodeURIComponent(conversationId)}` : "";
+  return get<SystemPrompt>(`/api/system-prompt${query}`);
+}
+
 export function getArtifacts(): Promise<ArtifactList> {
   return get<ArtifactList>("/api/artifacts");
 }
