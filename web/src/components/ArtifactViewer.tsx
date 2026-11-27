@@ -1,12 +1,25 @@
 import type { ViewerEventHandler, ViewerOptions, ViewerState } from "@file-viewer/react";
 import { registerFileViewerMermaidLoader } from "@file-viewer/renderer-text";
-import { CopyIcon, DownloadIcon, ExpandIcon } from "@hugeicons/core-free-icons";
+import {
+  Cancel01Icon,
+  CopyIcon,
+  DownloadIcon,
+  ExpandIcon,
+  Maximize01Icon,
+  Minimize01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtom, useSetAtom } from "jotai/react";
 import type { LazyExoticComponent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { artifactRawUrl } from "../api/client";
 import { type ArtifactRef, artifactViewerAtom, artifactViewerThemeAtom } from "../atoms";
 import {
@@ -46,7 +59,7 @@ function useArtifactUrl(artifactId: string, filePath: string) {
   return { url, error };
 }
 
-function useViewerOptions(compact: boolean): ViewerOptions | null {
+function useViewerOptions(): ViewerOptions | null {
   const [theme] = useAtom(artifactViewerThemeAtom);
   const [preset, setPreset] = useState<unknown>(null);
   useEffect(() => {
@@ -64,14 +77,14 @@ function useViewerOptions(compact: boolean): ViewerOptions | null {
       preset,
       rendererMode: "replace",
       theme,
-      toolbar: { position: compact ? "top-right" : "bottom-right" },
+      toolbar: false,
     } as ViewerOptions;
-  }, [preset, theme, compact]);
+  }, [preset, theme]);
 }
 
 function FilePreview({ ref, compact }: { ref: ArtifactRef; compact: boolean }) {
   const { url, error } = useArtifactUrl(ref.artifactId, ref.path);
-  const options = useViewerOptions(compact);
+  const options = useViewerOptions();
   const setTheme = useSetAtom(artifactViewerThemeAtom);
   const [renderError, setRenderError] = useState<string | null>(null);
   const name = artifactFileName(ref);
@@ -97,12 +110,19 @@ function FilePreview({ ref, compact }: { ref: ArtifactRef; compact: boolean }) {
     return <p className="p-3 text-xs text-destructive">{error ?? renderError}</p>;
   }
   if (!url) return <p className="p-3 text-xs text-muted-foreground">Loading file...</p>;
+  const frameClass = compact
+    ? "aspect-[3/4] max-h-[min(70vh,900px)] w-full overflow-hidden rounded-xl bg-background/40"
+    : "h-full w-full min-h-0";
   if (kind === "image") {
-    return <img src={url} alt={name} className="max-h-64 w-full object-contain" />;
+    return (
+      <div className={frameClass}>
+        <img src={url} alt={name} className="size-full object-contain" />
+      </div>
+    );
   }
   if (!options) return <p className="p-3 text-xs text-muted-foreground">Loading viewer...</p>;
   return (
-    <div className={compact ? "h-64 w-full" : "h-full w-full min-h-0"}>
+    <div className={frameClass}>
       <Suspense fallback={<p className="p-3 text-xs text-muted-foreground">Loading viewer...</p>}>
         <FileViewer
           url={url}
@@ -229,9 +249,14 @@ export function ArtifactPlainLink({
 /** Single global full-screen viewer, driven by artifactViewerAtom. */
 export function ArtifactFocusDialog() {
   const [ref, setRef] = useAtom(artifactViewerAtom);
+  const [focused, setFocused] = useState(false);
   const toast = useToast();
   const name = ref ? artifactFileName(ref) : "";
   const rawUrl = ref ? artifactRawUrl(ref.artifactId, ref.path) : "";
+
+  useEffect(() => {
+    if (!ref) setFocused(false);
+  }, [ref]);
 
   const copyLink = async () => {
     if (!ref) return;
@@ -245,7 +270,14 @@ export function ArtifactFocusDialog() {
 
   return (
     <Dialog open={ref !== null} onOpenChange={(open) => !open && setRef(null)}>
-      <DialogContent className="top-0! left-0! flex! h-dvh! w-screen! max-w-none! translate-x-0! translate-y-0! flex-col! gap-0! rounded-none! p-0! sm:top-1/2! sm:left-1/2! sm:h-[min(92vh,1000px)]! sm:w-[min(1200px,96vw)]! sm:-translate-x-1/2! sm:-translate-y-1/2! sm:rounded-3xl!">
+      <DialogContent
+        showCloseButton={false}
+        className={
+          focused
+            ? "top-0! left-0! flex! h-dvh! w-screen! max-w-none! translate-x-0! translate-y-0! flex-col! gap-0! rounded-none! p-0!"
+            : "top-1/2! left-1/2! flex! h-[min(92vh,1000px)]! w-[min(1200px,96vw)]! max-w-none! -translate-x-1/2! -translate-y-1/2! flex-col! gap-0! rounded-3xl! p-0!"
+        }
+      >
         <DialogTitle className="sr-only">Artifact viewer</DialogTitle>
         <DialogDescription className="sr-only">
           Preview of an artifact file created by the assistant.
@@ -275,6 +307,20 @@ export function ArtifactFocusDialog() {
               >
                 <HugeiconsIcon icon={CopyIcon} strokeWidth={2} />
               </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setFocused((value) => !value)}
+                aria-label={focused ? "Exit full screen" : "Enter full screen"}
+                aria-pressed={focused}
+              >
+                <HugeiconsIcon icon={focused ? Minimize01Icon : Maximize01Icon} strokeWidth={2} />
+              </Button>
+              <DialogClose
+                render={<Button variant="ghost" size="icon-sm" aria-label="Close viewer" />}
+              >
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              </DialogClose>
             </div>
             <div className="min-h-0 flex-1">
               <FilePreview ref={ref} compact={false} />
