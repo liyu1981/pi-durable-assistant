@@ -117,7 +117,12 @@ function ToolCard({
   const summary = fullText.replace(/\s+/g, " ").trim();
   const concise = summary.length > 120 ? `${summary.slice(0, 120)}...` : summary;
   return (
-    <Card size="sm" className={`gap-2 ${isError ? "ring-1 ring-destructive/40" : ""}`}>
+    <Card
+      size="sm"
+      className={`gap-2 rounded-2xl border border-border/60 bg-transparent py-2 shadow-none ring-0 ${
+        isError ? "border-destructive/40" : ""
+      }`}
+    >
       <CardHeader className="gap-1">
         <button
           type="button"

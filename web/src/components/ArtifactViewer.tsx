@@ -294,7 +294,7 @@ export function ArtifactEmbed({
   };
 
   return (
-    <div className="my-2 w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card text-sm shadow-sm">
+    <div className="my-2 w-full overflow-hidden rounded-2xl border border-border bg-card text-sm shadow-sm">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground" title={artifactRef.path}>

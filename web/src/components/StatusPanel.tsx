@@ -1,18 +1,13 @@
 import {
   ActivityIcon,
-  BookOpen01Icon,
-  BrainIcon,
   Calendar01Icon,
   Clock01Icon,
-  MagicWand01Icon,
   NotebookIcon,
   ServerIcon,
-  SettingsIcon,
   StickyNoteIcon,
-  ToolboxIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAtomValue, useSetAtom } from "jotai/react";
+import { useAtomValue } from "jotai/react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { post } from "../api/client";
 import type { TaskView } from "../api/types";
-import { drawerAtom, serverInfoAtom, sseStatusAtom, viewAtom } from "../atoms";
+import { serverInfoAtom, sseStatusAtom, viewAtom } from "../atoms";
 import { extractLiveInfo, formatDuration, formatTime, usageNumbers } from "../lib/format";
 import { useToast } from "../lib/useToast";
 import { ConfirmDialog, StatusMessage, toneVariant } from "./ui";
@@ -95,7 +90,6 @@ export function StatusPanel({ className }: { className?: string }) {
   const view = useAtomValue(viewAtom);
   const serverInfo = useAtomValue(serverInfoAtom);
   const sseStatus = useAtomValue(sseStatusAtom);
-  const setDrawer = useSetAtom(drawerAtom);
   const toast = useToast();
   const [now, setNow] = useState(Date.now());
   const [confirmCrash, setConfirmCrash] = useState(false);
@@ -286,57 +280,6 @@ export function StatusPanel({ className }: { className?: string }) {
                 }}
               />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-              Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDrawer({ open: true, panel: "tasks" })}
-            >
-              <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
-              Task center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDrawer({ open: true, panel: "memory" })}
-            >
-              <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
-              Memory
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDrawer({ open: true, panel: "skills" })}
-            >
-              <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
-              Skills
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDrawer({ open: true, panel: "tools" })}
-            >
-              <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
-              Tools
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDrawer({ open: true, panel: "knowledge" })}
-            >
-              <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
-              Knowledge
-            </Button>
           </CardContent>
         </Card>
 
