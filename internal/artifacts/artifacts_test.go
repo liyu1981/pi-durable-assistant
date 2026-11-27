@@ -68,3 +68,62 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("content dir still exists after delete: %v", err)
 	}
 }
+
+func TestStoreMoveFile(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
+	created, err := store.CreateArtifact(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.WriteFile(ctx, created.ID, "draft/note.md", []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := store.MoveFile(ctx, created.ID, "draft/note.md", "final/note.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.SizeBytes != 5 {
+		t.Fatalf("size after move = %d", updated.SizeBytes)
+	}
+	if _, ok, err := store.ReadFile(ctx, created.ID, "draft/note.md"); err != nil || ok {
+		t.Fatalf("source still exists after move: ok=%v err=%v", ok, err)
+	}
+	data, ok, err := store.ReadFile(ctx, created.ID, "final/note.md")
+	if err != nil || !ok || string(data) != "hello" {
+		t.Fatalf("destination missing: ok=%v data=%q err=%v", ok, data, err)
+	}
+	if _, err := store.WriteFile(ctx, created.ID, "final/other.md", []byte("replace me")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.MoveFile(ctx, created.ID, "final/note.md", "final/other.md"); err != nil {
+		t.Fatalf("move over existing destination: %v", err)
+	}
+	data, _, err = store.ReadFile(ctx, created.ID, "final/other.md")
+	if err != nil || string(data) != "hello" {
+		t.Fatalf("destination was not overwritten: %q err=%v", data, err)
+	}
+	if _, err := store.MoveFile(ctx, created.ID, "missing", "other"); err == nil {
+		t.Fatal("moving a missing source must fail")
+	}
+}
+
+func TestStoreRejectsUnsafePaths(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
+	created, err := store.CreateArtifact(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../escape.txt", "/absolute.txt", "a/../../escape.txt", "", ".", "back\\slash.txt"} {
+		if _, err := store.WriteFile(ctx, created.ID, name, []byte("x")); err == nil {
+			t.Fatalf("write accepted unsafe path %q", name)
+		}
+		if _, err := store.MoveFile(ctx, created.ID, "safe.txt", name); err == nil {
+			t.Fatalf("move accepted unsafe destination %q", name)
+		}
+	}
+	if err := store.DeleteArtifact(ctx, "../outside"); err == nil {
+		t.Fatal("delete accepted unsafe artifact id")
+	}
+}

@@ -5,6 +5,7 @@ import {
   BookOpen01Icon,
   BrainIcon,
   DownloadIcon,
+  File01Icon,
   MagicWand01Icon,
   Menu01Icon,
   PanelLeftCloseIcon,
@@ -45,6 +46,7 @@ import {
   systemSettingsOpenAtom,
   viewAtom,
 } from "./atoms";
+import { ArtifactFocusDialog } from "./components/ArtifactViewer";
 import { ChatThread } from "./components/ChatThread";
 import { Composer } from "./components/Composer";
 import { Drawer } from "./components/Drawer";
@@ -313,6 +315,10 @@ export function App() {
                 <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
                 Knowledge
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "artifacts" })}>
+                <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+                Files
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSystemSettingsOpen(true)}>
                 <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
                 System settings
@@ -371,6 +377,15 @@ export function App() {
           >
             <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
             Knowledge
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => setDrawer({ open: true, panel: "artifacts" })}
+          >
+            <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+            Files
           </Button>
           <Button
             variant="ghost"
@@ -512,6 +527,7 @@ export function App() {
 
       <Drawer />
       <SystemSettingsDialog />
+      <ArtifactFocusDialog />
       <ToastContainer />
     </div>
   );

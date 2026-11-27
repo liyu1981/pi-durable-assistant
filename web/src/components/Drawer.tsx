@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type DrawerPanel, drawerAtom } from "../atoms";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { MemoryPanel } from "./MemoryPanel";
 import { SkillsPanel } from "./SkillsPanel";
@@ -23,6 +24,7 @@ const TABS: { key: DrawerPanel; label: string }[] = [
   { key: "skills", label: "Skills" },
   { key: "tools", label: "Tools" },
   { key: "knowledge", label: "Knowledge" },
+  { key: "artifacts", label: "Files" },
 ];
 
 export function Drawer() {
@@ -75,6 +77,9 @@ export function Drawer() {
               </TabsContent>
               <TabsContent value="knowledge" className="mt-0">
                 <KnowledgePanel />
+              </TabsContent>
+              <TabsContent value="artifacts" className="mt-0">
+                <ArtifactsPanel />
               </TabsContent>
             </div>
           </ScrollArea>

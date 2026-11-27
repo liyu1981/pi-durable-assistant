@@ -310,3 +310,41 @@ export interface LLMTestResult {
   models: string[];
   latencyMs: number;
 }
+
+/** Durable artifact folder managed by the agent file subsystem. */
+export interface Artifact {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  pinned: boolean;
+  sizeBytes: number;
+}
+
+export interface ArtifactFileInfo {
+  path: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
+
+export interface ArtifactList {
+  artifacts: Artifact[];
+}
+
+export interface ArtifactFiles {
+  files: ArtifactFileInfo[];
+}
+
+export interface ArtifactConfirmation {
+  id: string;
+  artifactId: string;
+  action: "pin" | "unpin";
+  context: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
+export interface ArtifactConfirmations {
+  confirmations: ArtifactConfirmation[];
+}

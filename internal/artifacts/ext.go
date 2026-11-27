@@ -70,6 +70,35 @@ func Extension(store *Store, confirmations *ConfirmationStore) *durable.Extensio
 			}),
 			harness.DefineTool(durable.ToolRegistration{
 				ToolSchema: ai.ToolSchema{
+					Name:        "artifact_move",
+					Description: "Move or rename a file inside an artifact",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"artifactId": map[string]any{"type": "string"},
+							"from":       map[string]any{"type": "string"},
+							"to":         map[string]any{"type": "string"},
+						},
+						"required": []any{"artifactId", "from", "to"},
+					},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					input, _ := args.(map[string]any)
+					artifactID, _ := input["artifactId"].(string)
+					from, _ := input["from"].(string)
+					to, _ := input["to"].(string)
+					if artifactID == "" || from == "" || to == "" {
+						return artifactTextResult("artifact_move requires artifactId, from and to"), nil
+					}
+					if _, err := store.MoveFile(ctx, artifactID, from, to); err != nil {
+						return artifactTextResult(fmt.Sprintf("failed to move artifact file: %v", err)), nil
+					}
+					return artifactTextResult(fmt.Sprintf("moved %s to %s in artifact %s", from, to, artifactID)), nil
+				},
+			}),
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
 					Name:        "artifact_read",
 					Description: "Read a file from an artifact",
 					Parameters: map[string]any{
@@ -177,6 +206,12 @@ func Extension(store *Store, confirmations *ConfirmationStore) *durable.Extensio
 				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
 					return proposeArtifactConfirmation(ctx, args, confirmations, "unpin"), nil
 				},
+			}),
+		},
+		Sections: []*durable.PromptSection{
+			harness.Section("artifacts", func(ctx context.Context, input durable.PromptInput) (*string, error) {
+				instructions := `Artifact files are created with artifact_create and artifact_write. Use artifact_move to rename or move a file. To show a file in the conversation, reference it with an artifact:// Markdown link: [report.pdf](artifact://<id>/<path>) renders a preview card, ![chart.png](artifact://<id>/<path>) embeds the image, and a bare artifact:// link opens the full viewer. Pin requests need human confirmation.`
+				return &instructions, nil
 			}),
 		},
 	})

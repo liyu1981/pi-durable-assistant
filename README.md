@@ -51,7 +51,7 @@ pida service-uninstall    # remove it
 
 `pida config` writes a commented example covering every supported key. Re-run `pida config --update` after an upgrade to add new keys while keeping values you already set; keys this version does not document are kept at the end of the file.
 
-Artifacts are stored under `DATA_DIR/artifacts`; the agent creates, reads and updates files through the artifact tools, and users can pin artifacts via the API or UI. A global LRU limit (`ARTIFACT_MAX_TOTAL_BYTES`, default 4GB, accepts KB/MB/GB) evicts unpinned artifacts when the limit is exceeded; pinned artifacts are exempt and excluded from the size accounting. Agent-initiated pin/unpin requests go through a pending confirmation store and require human approval.
+Artifacts are stored under `DATA_DIR/artifacts`; the agent creates, reads, updates and moves files through the artifact tools, and users can browse, pin and preview them in the Files panel. Artifact links in chat (`[file](artifact://<id>/<path>)`, `![image](artifact://...)`, or a bare link) open a self-hosted file viewer with a full-screen mode. A global LRU limit (`ARTIFACT_MAX_TOTAL_BYTES`, default 4GB, accepts KB/MB/GB) evicts unpinned artifacts when the limit is exceeded; pinned artifacts are exempt and excluded from the size accounting. Agent-initiated pin/unpin requests go through a pending confirmation store and require human approval.
 
 `pida service-install` writes `~/.config/systemd/user/pida.service`, running `~/.local/bin/pida serve` with `DATA_DIR=~/.pida`, then prints the `systemctl --user` commands to enable it. Use `--print` to inspect the unit, `--force` to overwrite an existing one, and `--binary` / `--data-dir` to override the defaults.
 

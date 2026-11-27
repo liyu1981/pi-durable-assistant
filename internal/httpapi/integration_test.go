@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -199,7 +200,7 @@ func TestToolsRoute(t *testing.T) {
 		}
 		names[name] = true
 	}
-	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge", "artifact_create"} {
+	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge", "artifact_create", "artifact_move"} {
 		if !names[want] {
 			t.Fatalf("missing tool %q in %v", want, names)
 		}
@@ -309,6 +310,56 @@ func TestArtifactFileRoutes(t *testing.T) {
 	files, ok := body["files"].([]any)
 	if !ok || len(files) != 1 {
 		t.Fatalf("list artifact files missing: %v", body)
+	}
+}
+
+func TestArtifactMoveAndRawRoutes(t *testing.T) {
+	client := newTestServer(t)
+	status, body := client.do("POST", "/api/artifacts", nil)
+	if status != http.StatusCreated {
+		t.Fatalf("create artifact: %d %v", status, body)
+	}
+	id := body["artifact"].(map[string]any)["id"].(string)
+
+	status, _ = client.do("PUT", "/api/artifacts/"+id+"/files/draft/note.md", map[string]any{"content": "raw content"})
+	if status != http.StatusOK {
+		t.Fatalf("write file: %d", status)
+	}
+
+	request, err := http.NewRequest("GET", client.base+"/api/artifacts/"+id+"/raw/draft/note.md", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.SetBasicAuth("demo", "secret")
+	response, err := client.client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	raw, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK || string(raw) != "raw content" {
+		t.Fatalf("raw file: %d %q", response.StatusCode, raw)
+	}
+	if got := response.Header.Get("content-type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("raw content-type = %q", got)
+	}
+
+	status, body = client.do("POST", "/api/artifacts/"+id+"/move", map[string]any{
+		"from": "draft/note.md", "to": "final/note.md",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("move file: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/artifacts/"+id+"/raw/final/note.md", nil)
+	if status != http.StatusOK {
+		t.Fatalf("read moved file: %d %v", status, body)
+	}
+
+	status, _ = client.do("POST", "/api/artifacts/"+id+"/move", map[string]any{
+		"from": "final/note.md", "to": "../escape.md",
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("unsafe move should be rejected: %d", status)
 	}
 }
 

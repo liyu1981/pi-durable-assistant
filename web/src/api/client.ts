@@ -1,4 +1,9 @@
 import type {
+  Artifact,
+  ArtifactConfirmation,
+  ArtifactConfirmations,
+  ArtifactFiles,
+  ArtifactList,
   LLMModelsInput,
   LLMSettings,
   LLMSettingsInput,
@@ -155,4 +160,77 @@ export function subscribeView(
       onStatus("closed");
     },
   };
+}
+
+/** Artifact subsystem: folders of agent-managed files. */
+export function getArtifacts(): Promise<ArtifactList> {
+  return get<ArtifactList>("/api/artifacts");
+}
+
+export function createArtifact(): Promise<{ artifact: Artifact }> {
+  return post<{ artifact: Artifact }>("/api/artifacts");
+}
+
+export function deleteArtifact(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/artifacts/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function pinArtifact(id: string): Promise<{ artifact: Artifact }> {
+  return put<{ artifact: Artifact }>(`/api/artifacts/${encodeURIComponent(id)}/pin`, {});
+}
+
+export function unpinArtifact(id: string): Promise<{ artifact: Artifact }> {
+  return put<{ artifact: Artifact }>(`/api/artifacts/${encodeURIComponent(id)}/unpin`, {});
+}
+
+export function listArtifactFiles(id: string): Promise<ArtifactFiles> {
+  return get<ArtifactFiles>(`/api/artifacts/${encodeURIComponent(id)}/files`);
+}
+
+export function readArtifactFile(id: string, filePath: string): Promise<{ content: string }> {
+  return get<{ content: string }>(artifactJSONPath(id, filePath));
+}
+
+export function writeArtifactFile(
+  id: string,
+  filePath: string,
+  content: string,
+): Promise<{ artifact: Artifact }> {
+  return put<{ artifact: Artifact }>(artifactJSONPath(id, filePath), { content });
+}
+
+export function moveArtifactFile(
+  id: string,
+  from: string,
+  to: string,
+): Promise<{ artifact: Artifact }> {
+  return post<{ artifact: Artifact }>(`/api/artifacts/${encodeURIComponent(id)}/move`, {
+    from,
+    to,
+  });
+}
+
+export function getArtifactConfirmations(): Promise<ArtifactConfirmations> {
+  return get<ArtifactConfirmations>("/api/artifacts/confirmations");
+}
+
+export function decideArtifactConfirmation(
+  id: string,
+  decision: "approve" | "reject",
+): Promise<{ confirmation: ArtifactConfirmation }> {
+  return post<{ confirmation: ArtifactConfirmation }>(
+    `/api/artifacts/confirmations/${encodeURIComponent(id)}/${decision}`,
+  );
+}
+
+export function artifactJSONPath(id: string, filePath: string): string {
+  return `/api/artifacts/${encodeURIComponent(id)}/files/${encodeFilePath(filePath)}`;
+}
+
+export function artifactRawUrl(id: string, filePath: string): string {
+  return `/api/artifacts/${encodeURIComponent(id)}/raw/${encodeFilePath(filePath)}`;
+}
+
+function encodeFilePath(filePath: string): string {
+  return filePath.split("/").map(encodeURIComponent).join("/");
 }

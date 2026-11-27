@@ -1,6 +1,6 @@
 // Package artifacts implements the durable file subsystem used by the agent:
 // artifacts are addressable containers that hold files which can be created,
-// read, updated, pinned and cleaned up by policy.
+// read, updated, moved, pinned and cleaned up by policy.
 package artifacts
 
 import (
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -54,10 +55,51 @@ func newArtifactID() string {
 	return "art_" + hex.EncodeToString(b[:])
 }
 
-func (s *Store) metaPath(id string) string { return filepath.Join(s.root, id+".json") }
-func (s *Store) contentPath(id string, path string) string {
-	return filepath.Join(s.root, id, filepath.FromSlash(path))
+func validArtifactID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
+
+// artifactDir validates an artifact ID and returns its content directory.
+func (s *Store) artifactDir(id string) (string, error) {
+	if !validArtifactID(id) {
+		return "", fmt.Errorf("invalid artifact id %q", id)
+	}
+	return filepath.Join(s.root, id), nil
+}
+
+// safePath resolves a user-supplied file path inside one artifact. It rejects
+// absolute paths, escaping paths and separators that could leave the folder.
+func (s *Store) safePath(id, name string) (string, error) {
+	base, err := s.artifactDir(id)
+	if err != nil {
+		return "", err
+	}
+	if name == "" || name == "." || strings.ContainsAny(name, "\x00\\") || strings.HasPrefix(name, "/") {
+		return "", fmt.Errorf("invalid artifact path %q", name)
+	}
+	clean := path.Clean(name)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") {
+		return "", fmt.Errorf("invalid artifact path %q", name)
+	}
+	target := filepath.Join(base, filepath.FromSlash(clean))
+	rel, err := filepath.Rel(base, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid artifact path %q", name)
+	}
+	return target, nil
+}
+
+func (s *Store) metaPath(id string) string { return filepath.Join(s.root, id+".json") }
 
 func (s *Store) CreateArtifact(ctx context.Context) (*Artifact, error) {
 	s.mu.Lock()
@@ -72,6 +114,9 @@ func (s *Store) CreateArtifact(ctx context.Context) (*Artifact, error) {
 }
 
 func (s *Store) writeArtifactMeta(id string, artifact *Artifact) error {
+	if _, err := s.artifactDir(id); err != nil {
+		return err
+	}
 	data, err := json.Marshal(artifact)
 	if err != nil {
 		return err
@@ -82,9 +127,16 @@ func (s *Store) writeArtifactMeta(id string, artifact *Artifact) error {
 	return os.WriteFile(s.metaPath(id), data, 0o600)
 }
 
+// loadArtifact returns nil when the artifact does not exist.
 func (s *Store) loadArtifact(id string) (*Artifact, error) {
+	if _, err := s.artifactDir(id); err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(s.metaPath(id))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var artifact Artifact
@@ -96,7 +148,7 @@ func (s *Store) loadArtifact(id string) (*Artifact, error) {
 
 // WriteFile creates or updates a file inside an artifact and refreshes the
 // artifact's updated-at timestamp and size.
-func (s *Store) WriteFile(ctx context.Context, artifactID string, path string, content []byte) (*Artifact, error) {
+func (s *Store) WriteFile(ctx context.Context, artifactID, name string, content []byte) (*Artifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	artifact, err := s.loadArtifact(artifactID)
@@ -106,16 +158,58 @@ func (s *Store) WriteFile(ctx context.Context, artifactID string, path string, c
 	if artifact == nil {
 		return nil, fmt.Errorf("artifact %q not found", artifactID)
 	}
-	target := s.contentPath(artifactID, path)
+	target, err := s.safePath(artifactID, name)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return nil, err
 	}
 	if err := os.WriteFile(target, content, 0o600); err != nil {
 		return nil, err
 	}
+	return s.finishWriteLocked(artifact)
+}
+
+// MoveFile renames a file inside one artifact. An existing destination is
+// overwritten. Both paths must stay inside the artifact folder.
+func (s *Store) MoveFile(ctx context.Context, artifactID, from, to string) (*Artifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	artifact, err := s.loadArtifact(artifactID)
+	if err != nil {
+		return nil, err
+	}
+	if artifact == nil {
+		return nil, fmt.Errorf("artifact %q not found", artifactID)
+	}
+	source, err := s.safePath(artifactID, from)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.safePath(artifactID, to)
+	if err != nil {
+		return nil, err
+	}
+	if source == target {
+		return artifact, nil
+	}
+	if _, err := os.Stat(source); err != nil {
+		return nil, fmt.Errorf("source file %q not found: %w", from, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(source, target); err != nil {
+		return nil, err
+	}
+	return s.finishWriteLocked(artifact)
+}
+
+func (s *Store) finishWriteLocked(artifact *Artifact) (*Artifact, error) {
 	artifact.UpdatedAt = time.Now().UTC()
-	artifact.SizeBytes = s.contentSize(artifactID)
-	if err := s.writeArtifactMeta(artifactID, artifact); err != nil {
+	artifact.SizeBytes = s.contentSize(artifact.ID)
+	if err := s.writeArtifactMeta(artifact.ID, artifact); err != nil {
 		return nil, err
 	}
 	limit, err := ConfiguredMaxTotalBytes()
@@ -130,10 +224,14 @@ func (s *Store) WriteFile(ctx context.Context, artifactID string, path string, c
 
 // ReadFile returns the content of a file inside an artifact. ok is false when
 // the artifact or file does not exist.
-func (s *Store) ReadFile(ctx context.Context, artifactID string, path string) ([]byte, bool, error) {
+func (s *Store) ReadFile(ctx context.Context, artifactID, name string) ([]byte, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data, err := os.ReadFile(s.contentPath(artifactID, path))
+	target, err := s.safePath(artifactID, name)
+	if err != nil {
+		return nil, false, err
+	}
+	data, err := os.ReadFile(target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -148,7 +246,10 @@ func (s *Store) ReadFile(ctx context.Context, artifactID string, path string) ([
 func (s *Store) DeleteArtifact(ctx context.Context, artifactID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	contentDir := filepath.Join(s.root, artifactID)
+	contentDir, err := s.artifactDir(artifactID)
+	if err != nil {
+		return err
+	}
 	if err := os.RemoveAll(contentDir); err != nil {
 		return err
 	}
@@ -193,8 +294,12 @@ func (s *Store) listArtifactsLocked() ([]*Artifact, error) {
 func (s *Store) ListFiles(ctx context.Context, artifactID string) ([]*ArtifactFile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	base, err := s.artifactDir(artifactID)
+	if err != nil {
+		return nil, err
+	}
 	files := []*ArtifactFile{}
-	if err := filepath.WalkDir(filepath.Join(s.root, artifactID), func(path string, entry os.DirEntry, err error) error {
+	if err := filepath.WalkDir(base, func(filePath string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -205,11 +310,11 @@ func (s *Store) ListFiles(ctx context.Context, artifactID string) ([]*ArtifactFi
 		if err != nil {
 			return err
 		}
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(filepath.Join(s.root, artifactID), path)
+		rel, err := filepath.Rel(base, filePath)
 		if err != nil {
 			return err
 		}
@@ -218,7 +323,7 @@ func (s *Store) ListFiles(ctx context.Context, artifactID string) ([]*ArtifactFi
 			Path:       filepath.ToSlash(rel),
 			Content:    content,
 			SizeBytes:  info.Size(),
-			UpdatedAt:  time.Now().UTC(),
+			UpdatedAt:  info.ModTime().UTC(),
 		})
 		return nil
 	}); err != nil {
@@ -251,7 +356,11 @@ func (s *Store) SetPinned(ctx context.Context, artifactID string, pinned bool) e
 func (s *Store) Size(ctx context.Context, artifactID string) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.contentSize(artifactID), nil
+	base, err := s.artifactDir(artifactID)
+	if err != nil {
+		return 0, err
+	}
+	return contentSize(base), nil
 }
 
 // Total returns the sum of the sizes of all artifacts. The LRU cleanup policy
@@ -272,8 +381,16 @@ func (s *Store) Total(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) contentSize(artifactID string) int64 {
+	base, err := s.artifactDir(artifactID)
+	if err != nil {
+		return 0
+	}
+	return contentSize(base)
+}
+
+func contentSize(base string) int64 {
 	var size int64
-	_ = filepath.WalkDir(filepath.Join(s.root, artifactID), func(path string, entry os.DirEntry, err error) error {
+	_ = filepath.WalkDir(base, func(filePath string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

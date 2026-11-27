@@ -80,6 +80,8 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("GET /api/artifacts/{id}/files", server.listArtifactFiles)
 	mux.HandleFunc("GET /api/artifacts/{id}/files/{path...}", server.readArtifactFile)
 	mux.HandleFunc("PUT /api/artifacts/{id}/files/{path...}", server.writeArtifactFile)
+	mux.HandleFunc("GET /api/artifacts/{id}/raw/{path...}", server.rawArtifactFile)
+	mux.HandleFunc("POST /api/artifacts/{id}/move", server.moveArtifactFile)
 	mux.HandleFunc("PUT /api/artifacts/{id}/pin", server.pinArtifact)
 	mux.HandleFunc("PUT /api/artifacts/{id}/unpin", server.unpinArtifact)
 	mux.HandleFunc("GET /api/artifacts/confirmations", server.listArtifactConfirmations)
@@ -228,7 +230,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "." {
 		name = "index.html"
 	}
-	if strings.HasPrefix(name, "assets/") {
+	if strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "vendor/") {
 		w.Header().Set("cache-control", "public, max-age=31536000, immutable")
 	} else {
 		// The HTML entrypoint points at hashed assets; never let a dev rebuild serve a stale shell.
@@ -260,8 +262,20 @@ func contentTypeFor(name string) string {
 		return "text/html; charset=utf-8"
 	case strings.HasSuffix(name, ".css"):
 		return "text/css; charset=utf-8"
-	case strings.HasSuffix(name, ".js"):
+	case strings.HasSuffix(name, ".js"), strings.HasSuffix(name, ".mjs"):
 		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".wasm"):
+		return "application/wasm"
+	case strings.HasSuffix(name, ".ttf"):
+		return "font/ttf"
+	case strings.HasSuffix(name, ".woff"):
+		return "font/woff"
+	case strings.HasSuffix(name, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(name, ".txt"),
+		strings.HasSuffix(name, ".bcmap"),
+		strings.HasSuffix(name, ".pfb"):
+		return "text/plain; charset=utf-8"
 	case strings.HasSuffix(name, ".svg"):
 		return "image/svg+xml"
 	case strings.HasSuffix(name, ".woff2"):

@@ -51,8 +51,32 @@ export const rightPanelCollapsedAtom = atomWithStorage("pi.rightPanelCollapsed",
 
 export const systemSettingsOpenAtom = atom(false);
 
+export interface ArtifactRef {
+  artifactId: string;
+  path: string;
+}
+
+/** The artifact currently shown in the full-screen viewer. */
+export const artifactViewerAtom = atom<ArtifactRef | null>(null);
+export type ArtifactViewerTheme = "light" | "dark";
+const initialArtifactViewerTheme: ArtifactViewerTheme =
+  typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+    ? "dark"
+    : "light";
+export const artifactViewerThemeAtom = atomWithStorage<ArtifactViewerTheme>(
+  "pi.artifactViewerTheme",
+  initialArtifactViewerTheme,
+);
+
 /** Panels available in the right-hand management drawer. */
-export type DrawerPanel = "tasks" | "memory" | "skills" | "tools" | "knowledge" | "status";
+export type DrawerPanel =
+  | "tasks"
+  | "memory"
+  | "skills"
+  | "tools"
+  | "knowledge"
+  | "status"
+  | "artifacts";
 
 export const drawerAtom = atom<{
   open: boolean;

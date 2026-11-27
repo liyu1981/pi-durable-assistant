@@ -34,8 +34,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // API and SSE are always live.
+  // API, SSE and large file-viewer assets are always live; the shell cache
+  // must not fill up with renderer chunks and PDF fonts.
   if (url.pathname.startsWith("/api/")) return;
+  if (
+    url.pathname.includes("/vendor/") ||
+    /\.(js|mjs|css|wasm|woff2?|ttf|bcmap|pfb)$/.test(url.pathname)
+  ) {
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { parseArtifactRef } from "../lib/artifact";
+import { ArtifactEmbed, ArtifactInlineImage, ArtifactPlainLink } from "./ArtifactViewer";
 
-const INLINE = /(`[^`\n]+`)|(\*\*[^*]+\*\*)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g;
+const INLINE = /(!?\[[^\]\n]*\]\([^\s)]+\))|(`[^`\n]+`)|(\*\*[^*]+\*\*)|(artifact:\/\/[^\s<)]+)/g;
 const URL_PATTERN = /(https?:\/\/[^\s<)]+)/g;
 
 function renderUrls(text: string, base: string): ReactNode[] {
@@ -45,20 +47,53 @@ function renderInline(text: string, base: string): ReactNode[] {
           {token.slice(2, -2)}
         </strong>,
       );
+    } else if (token.startsWith("artifact://")) {
+      const ref = parseArtifactRef(token);
+      nodes.push(
+        ref ? (
+          <ArtifactPlainLink key={`${base}-artifact-${at}`} ref={ref}>
+            {token}
+          </ArtifactPlainLink>
+        ) : (
+          <span key={`${base}-artifact-${at}`}>{token}</span>
+        ),
+      );
     } else {
-      const link = /^\[([^\]]+)\]\((https?:\/\/\S+)\)$/.exec(token);
-      if (link) {
+      const image = /^!\[([^\]]*)\]\(([^\s)]+)\)$/.exec(token);
+      if (image) {
+        const ref = parseArtifactRef(image[2]);
         nodes.push(
-          <a
-            key={`${base}-link-${at}`}
-            href={link[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2"
-          >
-            {link[1]}
-          </a>,
+          ref ? (
+            <ArtifactInlineImage key={`${base}-image-${at}`} ref={ref} alt={image[1]} />
+          ) : (
+            <img
+              key={`${base}-image-${at}`}
+              src={image[2]}
+              alt={image[1]}
+              className="max-h-80 max-w-full rounded-xl"
+            />
+          ),
         );
+      } else {
+        const link = /^\[([^\]]+)\]\(([^\s)]+)\)$/.exec(token);
+        if (link) {
+          const ref = parseArtifactRef(link[2]);
+          if (ref) {
+            nodes.push(<ArtifactEmbed key={`${base}-artifact-${at}`} ref={ref} />);
+          } else {
+            nodes.push(
+              <a
+                key={`${base}-link-${at}`}
+                href={link[2]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                {link[1]}
+              </a>,
+            );
+          }
+        }
       }
     }
     last = at + token.length;

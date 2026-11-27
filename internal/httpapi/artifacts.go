@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"mime"
 	"net/http"
+	"path"
+	"strings"
 
 	"github.com/liyu1981/pi-durable-assistant/internal/artifacts"
 )
@@ -109,6 +112,78 @@ func (s *Server) unpinArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"artifact": artifactView(updated)})
+}
+
+// moveArtifactFile renames or moves a file inside an artifact.
+func (s *Server) moveArtifactFile(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r, 16_000)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	from, ok := body["from"].(string)
+	if !ok || from == "" {
+		writeError(w, http.StatusBadRequest, "from must be a non-empty string")
+		return
+	}
+	to, ok := body["to"].(string)
+	if !ok || to == "" {
+		writeError(w, http.StatusBadRequest, "to must be a non-empty string")
+		return
+	}
+	updated, err := s.Runtime.Artifacts.MoveFile(r.Context(), r.PathValue("id"), from, to)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"artifact": artifactView(updated)})
+}
+
+// rawArtifactFile serves the file bytes for browser preview.
+func (s *Server) rawArtifactFile(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("path")
+	data, ok, err := s.Runtime.Artifacts.ReadFile(r.Context(), r.PathValue("id"), name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "artifact file not found")
+		return
+	}
+	w.Header().Set("content-type", artifactContentType(name))
+	w.Header().Set("content-disposition", "inline; filename=\""+safeFilename(name)+"\"")
+	w.Header().Set("cache-control", "no-store")
+	w.Write(data)
+}
+
+func artifactContentType(name string) string {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml", ".log":
+		return "text/plain; charset=utf-8"
+	case ".js", ".mjs", ".ts", ".tsx", ".jsx":
+		return "text/javascript; charset=utf-8"
+	case ".html", ".htm":
+		return "text/html; charset=utf-8"
+	case ".svg":
+		return "image/svg+xml"
+	case ".pdf":
+		return "application/pdf"
+	default:
+		if value := mime.TypeByExtension(path.Ext(name)); value != "" {
+			return value
+		}
+		return "application/octet-stream"
+	}
+}
+
+func safeFilename(name string) string {
+	base := path.Base(name)
+	base = strings.ReplaceAll(base, "\"", "")
+	if base == "" || base == "." || base == "/" {
+		return "file"
+	}
+	return base
 }
 
 // listArtifactFiles lists the files in one artifact.
