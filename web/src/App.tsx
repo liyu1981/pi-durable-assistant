@@ -46,7 +46,7 @@ import {
   systemSettingsOpenAtom,
   viewAtom,
 } from "./atoms";
-import { ArtifactFocusDialog } from "./components/ArtifactViewer";
+import { ArtifactFocusDialog, MermaidLightbox } from "./components/ArtifactViewer";
 import { ChatThread } from "./components/ChatThread";
 import { Composer } from "./components/Composer";
 import { Drawer } from "./components/Drawer";
@@ -528,6 +528,7 @@ export function App() {
       <Drawer />
       <SystemSettingsDialog />
       <ArtifactFocusDialog />
+      <MermaidLightbox />
       <ToastContainer />
     </div>
   );

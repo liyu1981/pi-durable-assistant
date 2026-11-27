@@ -1,4 +1,9 @@
-import type { ViewerEventHandler, ViewerOptions, ViewerState } from "@file-viewer/react";
+import type {
+  FileViewerHandle,
+  ViewerEventHandler,
+  ViewerOptions,
+  ViewerState,
+} from "@file-viewer/react";
 import { registerFileViewerMermaidLoader } from "@file-viewer/renderer-text";
 import {
   Cancel01Icon,
@@ -7,11 +12,13 @@ import {
   ExpandIcon,
   Maximize01Icon,
   Minimize01Icon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAtom, useSetAtom } from "jotai/react";
-import type { LazyExoticComponent } from "react";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai/react";
+import type { LazyExoticComponent, Ref, RefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,7 +28,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { artifactRawUrl } from "../api/client";
-import { type ArtifactRef, artifactViewerAtom, artifactViewerThemeAtom } from "../atoms";
+import {
+  type ArtifactRef,
+  artifactViewerAtom,
+  artifactViewerThemeAtom,
+  mermaidLightboxAtom,
+} from "../atoms";
 import {
   artifactFileName,
   artifactKind,
@@ -59,7 +71,7 @@ function useArtifactUrl(artifactId: string, filePath: string) {
   return { url, error };
 }
 
-function useViewerOptions(): ViewerOptions | null {
+function useViewerOptions(compact: boolean): ViewerOptions | null {
   const [theme] = useAtom(artifactViewerThemeAtom);
   const [preset, setPreset] = useState<unknown>(null);
   useEffect(() => {
@@ -77,14 +89,136 @@ function useViewerOptions(): ViewerOptions | null {
       preset,
       rendererMode: "replace",
       theme,
-      toolbar: false,
+      toolbar: compact ? false : { position: "bottom-right" },
     } as ViewerOptions;
-  }, [preset, theme]);
+  }, [preset, theme, compact]);
 }
 
-function FilePreview({ ref, compact }: { ref: ArtifactRef; compact: boolean }) {
+const THIN_SCROLLBAR_CSS = `
+  * { scrollbar-width: thin !important; scrollbar-color: var(--muted-foreground, #888) transparent !important; }
+  *::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+  *::-webkit-scrollbar-track { background: transparent !important; }
+  *::-webkit-scrollbar-thumb { background: var(--muted-foreground, #888) !important; border-radius: 999px !important; }
+`;
+
+function useThinScrollbars() {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    let observer: MutationObserver | null = null;
+    const inject = (root: ParentNode) => {
+      const target = root as Document | ShadowRoot;
+      if (!("adoptedStyleSheets" in target) || target.querySelector?.("[data-pida-thin-scrollbar]"))
+        return;
+      const style = document.createElement("style");
+      style.setAttribute("data-pida-thin-scrollbar", "");
+      style.textContent = THIN_SCROLLBAR_CSS;
+      target.appendChild(style);
+    };
+    const discover = () => {
+      const host = hostRef.current;
+      if (!host) return;
+      for (const node of [host, ...Array.from(host.querySelectorAll("*"))]) {
+        const shadow = (node as HTMLElement).shadowRoot;
+        if (!shadow) continue;
+        inject(shadow);
+        if (!observer) {
+          observer = new MutationObserver(() => inject(shadow));
+          observer.observe(shadow, { childList: true, subtree: true });
+        }
+      }
+    };
+    const timer = window.setInterval(discover, 1200);
+    discover();
+    return () => {
+      window.clearInterval(timer);
+      observer?.disconnect();
+    };
+  }, []);
+  return hostRef;
+}
+
+const MERMAID_DARK_VARS =
+  "--pele-bg:#1e1e1e;--pele-fg:#e6e6e6;--pele-muted:#a0a0a0;" +
+  "--pele-line:#e6e6e6;--pele-surface:#2a2a2a;--pele-surface-alt:#333333;" +
+  "--pele-border:#555555;--pele-accent:#7aa2f7;";
+
+/** Bind clicks on rendered Mermaid diagrams to the global lightbox. */
+function useMermaidLightbox(hostRef: RefObject<HTMLDivElement | null>) {
+  const setLightbox = useSetAtom(mermaidLightboxAtom);
+  const theme = useAtomValue(artifactViewerThemeAtom);
+  const themeRef = useRef(theme);
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    let observer: MutationObserver | null = null;
+    const bound = new WeakSet<Element>();
+
+    const showSvg = (element: Element) => {
+      const svg = (
+        element.matches("svg") ? element : element.querySelector("svg")
+      ) as SVGElement | null;
+      if (!svg) return;
+      let html = svg.outerHTML;
+      const dark = themeRef.current === "dark";
+      if (dark && !html.includes("--pele-fg:#e6e6e6")) {
+        html = /<svg\b[^>]*\bstyle="/.test(html)
+          ? html.replace(/(<svg\b[^>]*\bstyle=")([^"]*)(")/, `$1$2;${MERMAID_DARK_VARS}$3`)
+          : html.replace(/<svg\b/, `<svg style="${MERMAID_DARK_VARS}"`);
+      }
+      setLightbox({ svg: html, dark });
+    };
+
+    const attach = (root: ParentNode) => {
+      root.querySelectorAll(".markdown-mermaid, .markdown-mermaid-svg").forEach((element) => {
+        if (bound.has(element)) return;
+        bound.add(element);
+        (element as HTMLElement).style.cursor = "zoom-in";
+        element.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showSvg(element);
+        });
+      });
+    };
+
+    const discover = () => {
+      const host = hostRef.current;
+      if (!host) return;
+      for (const node of [host, ...Array.from(host.querySelectorAll("*"))]) {
+        const shadow = (node as HTMLElement).shadowRoot;
+        if (!shadow) continue;
+        attach(shadow);
+        if (!observer) {
+          observer = new MutationObserver(() => attach(shadow));
+          observer.observe(shadow, { childList: true, subtree: true });
+        }
+      }
+    };
+
+    const timer = window.setInterval(discover, 1200);
+    discover();
+    return () => {
+      window.clearInterval(timer);
+      observer?.disconnect();
+    };
+  }, [hostRef, setLightbox]);
+}
+
+function FilePreview({
+  ref,
+  compact,
+  viewerRef,
+}: {
+  ref: ArtifactRef;
+  compact: boolean;
+  viewerRef?: Ref<FileViewerHandle>;
+}) {
   const { url, error } = useArtifactUrl(ref.artifactId, ref.path);
-  const options = useViewerOptions();
+  const options = useViewerOptions(compact);
+  const scrollHostRef = useThinScrollbars();
+  useMermaidLightbox(scrollHostRef);
   const setTheme = useSetAtom(artifactViewerThemeAtom);
   const [renderError, setRenderError] = useState<string | null>(null);
   const name = artifactFileName(ref);
@@ -111,20 +245,21 @@ function FilePreview({ ref, compact }: { ref: ArtifactRef; compact: boolean }) {
   }
   if (!url) return <p className="p-3 text-xs text-muted-foreground">Loading file...</p>;
   const frameClass = compact
-    ? "aspect-[3/4] max-h-[min(70vh,900px)] w-full overflow-hidden rounded-xl bg-background/40"
+    ? "aspect-[4/3] max-h-[min(70vh,900px)] w-full overflow-hidden bg-background/40"
     : "h-full w-full min-h-0";
   if (kind === "image") {
     return (
-      <div className={frameClass}>
+      <div ref={scrollHostRef} className={frameClass}>
         <img src={url} alt={name} className="size-full object-contain" />
       </div>
     );
   }
   if (!options) return <p className="p-3 text-xs text-muted-foreground">Loading viewer...</p>;
   return (
-    <div className={frameClass}>
+    <div ref={scrollHostRef} className={frameClass}>
       <Suspense fallback={<p className="p-3 text-xs text-muted-foreground">Loading viewer...</p>}>
         <FileViewer
+          ref={viewerRef}
           url={url}
           filename={name}
           options={options}
@@ -250,6 +385,7 @@ export function ArtifactPlainLink({
 export function ArtifactFocusDialog() {
   const [ref, setRef] = useAtom(artifactViewerAtom);
   const [focused, setFocused] = useState(false);
+  const viewerRef = useRef<FileViewerHandle | null>(null);
   const toast = useToast();
   const name = ref ? artifactFileName(ref) : "";
   const rawUrl = ref ? artifactRawUrl(ref.artifactId, ref.path) : "";
@@ -310,6 +446,22 @@ export function ArtifactFocusDialog() {
               <Button
                 variant="ghost"
                 size="icon-sm"
+                onClick={() => void viewerRef.current?.zoomIn()}
+                aria-label="Zoom in"
+              >
+                <HugeiconsIcon icon={ZoomInIcon} strokeWidth={2} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void viewerRef.current?.zoomOut()}
+                aria-label="Zoom out"
+              >
+                <HugeiconsIcon icon={ZoomOutIcon} strokeWidth={2} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setFocused((value) => !value)}
                 aria-label={focused ? "Exit full screen" : "Enter full screen"}
                 aria-pressed={focused}
@@ -323,7 +475,7 @@ export function ArtifactFocusDialog() {
               </DialogClose>
             </div>
             <div className="min-h-0 flex-1">
-              <FilePreview ref={ref} compact={false} />
+              <FilePreview ref={ref} compact={false} viewerRef={viewerRef} />
             </div>
           </>
         ) : null}
@@ -335,4 +487,133 @@ export function ArtifactFocusDialog() {
 /** Validates a parsed artifact reference before passing it to the viewer. */
 export function validArtifactLink(value: string): ArtifactRef | null {
   return parseArtifactRef(value);
+}
+
+/** Full-screen lightbox for a rendered Mermaid diagram. */
+export function MermaidLightbox() {
+  const [lightbox, setLightbox] = useAtom(mermaidLightboxAtom);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [focused, setFocused] = useState(false);
+  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const dragHostRef = useRef<HTMLDivElement | null>(null);
+
+  const close = useCallback(() => setLightbox(null), [setLightbox]);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+    setFocused(false);
+  }, [lightbox]);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox, close]);
+
+  useEffect(() => {
+    const element = dragHostRef.current;
+    if (!element || !lightbox) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setScale((value) => Math.min(4, Math.max(0.25, value - event.deltaY * 0.001)));
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [lightbox]);
+
+  if (!lightbox) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Close diagram"
+        className="fixed inset-0 z-100 bg-black/70"
+        onClick={close}
+      />
+      <div className="pointer-events-none fixed inset-0 z-101 flex items-center justify-center">
+        <div
+          className={`pointer-events-auto relative flex flex-col overflow-hidden ${
+            focused ? "size-full rounded-none" : "h-[80vh] w-[80vw] rounded-lg"
+          } ${lightbox.dark ? "bg-neutral-900 text-white" : "bg-white text-black"}`}
+        >
+          <div className="absolute left-2 top-2 z-10 flex gap-1 rounded-md bg-black/50 p-0.5">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-white/70 hover:bg-white/10 hover:text-white"
+              aria-label="Zoom in"
+              onClick={() => setScale((value) => Math.min(4, value + 0.25))}
+            >
+              <HugeiconsIcon icon={ZoomInIcon} strokeWidth={2} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-white/70 hover:bg-white/10 hover:text-white"
+              aria-label="Zoom out"
+              onClick={() => setScale((value) => Math.max(0.25, value - 0.25))}
+            >
+              <HugeiconsIcon icon={ZoomOutIcon} strokeWidth={2} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-white/70 hover:bg-white/10 hover:text-white"
+              aria-label={focused ? "Exit focus" : "Enter focus"}
+              aria-pressed={focused}
+              onClick={() => setFocused((value) => !value)}
+            >
+              <HugeiconsIcon icon={focused ? Minimize01Icon : Maximize01Icon} strokeWidth={2} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-white/70 hover:bg-rose-500/20 hover:text-rose-200"
+              aria-label="Close diagram"
+              onClick={close}
+            >
+              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+            </Button>
+          </div>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag-to-pan is supplementary to the zoom controls. */}
+          <div
+            ref={dragHostRef}
+            className="flex min-h-0 flex-1 cursor-grab items-center justify-center overflow-hidden active:cursor-grabbing"
+            onMouseDown={(event) => {
+              dragRef.current = { x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y };
+            }}
+            onMouseMove={(event) => {
+              if (!dragRef.current) return;
+              setOffset({
+                x: dragRef.current.ox + (event.clientX - dragRef.current.x),
+                y: dragRef.current.oy + (event.clientY - dragRef.current.y),
+              });
+            }}
+            onMouseUp={() => {
+              dragRef.current = null;
+            }}
+            onMouseLeave={() => {
+              dragRef.current = null;
+            }}
+          >
+            <div
+              style={{
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+                transformOrigin: "center center",
+              }}
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: SVG is generated by Pele inside the viewer.
+              dangerouslySetInnerHTML={{ __html: lightbox.svg }}
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }

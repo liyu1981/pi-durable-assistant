@@ -51,6 +51,14 @@ export const rightPanelCollapsedAtom = atomWithStorage("pi.rightPanelCollapsed",
 
 export const systemSettingsOpenAtom = atom(false);
 
+export interface MermaidLightboxState {
+  svg: string;
+  dark: boolean;
+}
+
+/** Rendered Mermaid diagram sent to the full-screen lightbox. */
+export const mermaidLightboxAtom = atom<MermaidLightboxState | null>(null);
+
 export interface ArtifactRef {
   artifactId: string;
   path: string;

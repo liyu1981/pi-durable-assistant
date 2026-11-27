@@ -1,5 +1,6 @@
 import {
   Alert02Icon,
+  ArrowDown01Icon,
   ArrowUpRightIcon,
   GitForkIcon,
   Loading03Icon,
@@ -8,11 +9,11 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { imageUrl } from "../api/client";
 import type { LiveToolSlot, ToolCallView, ToolEntry, ViewEntry, ViewPayload } from "../api/types";
@@ -103,40 +104,62 @@ function ToolCard({
   childId?: number;
   onSelectConversation: (id: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const isError = Boolean(result?.isError);
   const text = result?.text ?? "";
   const preview = text.length > 240 ? `${text.slice(0, 240)}...` : text;
   const runningOutput = running?.output?.trim().split(/\r?\n/).filter(Boolean).at(-1) ?? "";
   const displayName = name === "delegate" ? "Subagent" : name || "Tool call";
+  const status = isError ? "Failed" : result ? "Done" : "Running";
+  const fullText = result
+    ? preview || (isError ? "Tool failed" : "Done")
+    : runningOutput || "Running...";
+  const summary = fullText.replace(/\s+/g, " ").trim();
+  const concise = summary.length > 120 ? `${summary.slice(0, 120)}...` : summary;
   return (
     <Card size="sm" className={`gap-2 ${isError ? "ring-1 ring-destructive/40" : ""}`}>
       <CardHeader className="gap-1">
-        <CardTitle className="text-sm">{displayName}</CardTitle>
-        <CardAction>
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-2 text-left"
+        >
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={2}
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+          <CardTitle className="min-w-0 flex-1 truncate text-sm">{displayName}</CardTitle>
           <Badge variant={toneVariant(isError ? "danger" : result ? "success" : "warning")}>
-            {isError ? "Failed" : result ? "Done" : "Running"}
+            {status}
           </Badge>
-        </CardAction>
+        </button>
+        {!expanded ? (
+          <p className="truncate pl-6 text-xs text-muted-foreground" title={summary}>
+            {concise}
+          </p>
+        ) : null}
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 text-sm">
-        {args !== undefined ? (
-          <p className="text-xs text-muted-foreground">Arguments: {formatToolArgs(args)}</p>
-        ) : null}
-        {childId !== undefined ? (
-          <Button
-            variant="link"
-            size="xs"
-            className="h-auto justify-start px-0"
-            onClick={() => onSelectConversation(childId)}
-          >
-            Open subagent conversation
-            <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} />
-          </Button>
-        ) : null}
-        <p className="whitespace-pre-wrap break-words">
-          {result ? preview || (isError ? "Tool failed" : "Done") : runningOutput || "Running..."}
-        </p>
-      </CardContent>
+      {expanded ? (
+        <CardContent className="flex flex-col gap-2 text-sm">
+          {args !== undefined ? (
+            <p className="text-xs text-muted-foreground">Arguments: {formatToolArgs(args)}</p>
+          ) : null}
+          {childId !== undefined ? (
+            <Button
+              variant="link"
+              size="xs"
+              className="h-auto justify-start px-0"
+              onClick={() => onSelectConversation(childId)}
+            >
+              Open subagent conversation
+              <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} />
+            </Button>
+          ) : null}
+          <p className="whitespace-pre-wrap break-words">{fullText}</p>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -290,7 +313,7 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
       return (
         <div key={entry.id} className="flex flex-col gap-3">
           {entry.text.trim() ? (
-            <div className="border-l-2 border-primary/60 pl-4">
+            <div>
               <Markdown text={entry.text} />
             </div>
           ) : null}
@@ -374,7 +397,7 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
             )}
 
             {showLive ? (
-              <div className="flex flex-col gap-3 border-l-2 border-primary/60 pl-4">
+              <div className="flex flex-col gap-3">
                 <Badge variant="secondary" className="w-fit gap-1">
                   <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} className="animate-spin" />
                   Streaming
