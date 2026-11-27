@@ -51,11 +51,22 @@ import {
 import { ArtifactFocusDialog, MermaidLightbox } from "./components/ArtifactViewer";
 import { ChatThread } from "./components/ChatThread";
 import { Composer } from "./components/Composer";
-import { Drawer, ManagementTabs } from "./components/Drawer";
+import { Drawer, MANAGEMENT_TABS, ManagementTabs } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
 import { SystemSettingsDialog } from "./components/SystemSettingsDialog";
 import { ToastContainer } from "./components/ToastContainer";
 import { useToast } from "./lib/useToast";
+
+const PANEL_ICON: Record<DrawerPanel, typeof SettingsIcon> = {
+  status: ActivityIcon,
+  artifacts: File01Icon,
+  tasks: ActivityIcon,
+  memory: BrainIcon,
+  knowledge: BookOpen01Icon,
+  skills: MagicWand01Icon,
+  tools: ToolboxIcon,
+  system: SettingsIcon,
+};
 
 function hashConversationId(): number | null {
   const raw = window.location.hash.replace(/^#/, "").trim();
@@ -299,43 +310,17 @@ export function App() {
               }
             />
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openPanel("status")}>
-                <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
-                Status
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("system")}>
-                <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-                System prompt
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => openPanel("tasks")}>
-                <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
-                Tasks
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("memory")}>
-                <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
-                Memory
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("skills")}>
-                <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
-                Skills
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("tools")}>
-                <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
-                Tools
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("knowledge")}>
-                <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
-                Knowledge
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openPanel("artifacts")}>
-                <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
-                Files
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSystemSettingsOpen(true)}>
                 <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-                System settings
+                System Settings
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {MANAGEMENT_TABS.map((tab) => (
+                <DropdownMenuItem key={tab.key} onClick={() => openPanel(tab.key)}>
+                  <HugeiconsIcon icon={PANEL_ICON[tab.key]} strokeWidth={2} />
+                  {tab.label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <Button

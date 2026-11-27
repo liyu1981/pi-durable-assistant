@@ -4,13 +4,7 @@ import { useAtom } from "jotai/react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type DrawerPanel, drawerAtom } from "../atoms";
 import { ArtifactsPanel } from "./ArtifactsPanel";
@@ -22,7 +16,7 @@ import { SystemPromptPanel } from "./SystemPromptPanel";
 import { TaskCenter } from "./TaskCenter";
 import { ToolsPanel } from "./ToolsPanel";
 
-const TABS: { key: DrawerPanel; label: string }[] = [
+export const MANAGEMENT_TABS: { key: DrawerPanel; label: string }[] = [
   { key: "status", label: "Status" },
   { key: "artifacts", label: "Files" },
   { key: "tasks", label: "Tasks" },
@@ -30,7 +24,7 @@ const TABS: { key: DrawerPanel; label: string }[] = [
   { key: "knowledge", label: "Knowledge" },
   { key: "skills", label: "Skills" },
   { key: "tools", label: "Tools" },
-  { key: "system", label: "System" },
+  { key: "system", label: "System Prompt" },
 ];
 
 /** Shared management tabs, used by the desktop right panel and mobile drawer. */
@@ -67,7 +61,7 @@ export function ManagementTabs({
           className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <TabsList className="w-max min-w-full">
-            {TABS.map((tab) => (
+            {MANAGEMENT_TABS.map((tab) => (
               <TabsTrigger key={tab.key} value={tab.key}>
                 {tab.label}
               </TabsTrigger>
@@ -125,12 +119,6 @@ export function Drawer() {
       onOpenChange={(open) => setDrawer((previous) => ({ ...previous, open }))}
     >
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-xl lg:hidden">
-        <SheetHeader className="border-b border-border">
-          <SheetTitle>Management</SheetTitle>
-          <SheetDescription>
-            Review schedules, reminders, memory, skills, tools, files, and the system prompt.
-          </SheetDescription>
-        </SheetHeader>
         <ManagementTabs
           value={drawer.panel}
           onValueChange={(panel) => setDrawer({ open: true, panel })}
