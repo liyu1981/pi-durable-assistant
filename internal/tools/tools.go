@@ -444,18 +444,33 @@ var Assistant = harness.DefineExtension(durable.Extension{
 
 func boolPtr(value bool) *bool { return &value }
 
+// Compiled once: the read-page path runs on every fetch_page call.
+// Go's regexp (RE2) has no backreferences, so each tag is dropped by its own
+// pattern instead of the earlier `<tag>...</\1>`.
+var (
+	scriptBlockRE = regexp.MustCompile(`(?is)<script\b[^>]*>.*?</script\s*>`)
+	styleBlockRE  = regexp.MustCompile(`(?is)<style\b[^>]*>.*?</style\s*>`)
+	noScriptRE    = regexp.MustCompile(`(?is)<noscript\b[^>]*>.*?</noscript\s*>`)
+	tagRE         = regexp.MustCompile(`<[^>]+>`)
+	hexEntityRE   = regexp.MustCompile(`(?i)&#x([0-9a-f]+);`)
+	decEntityRE   = regexp.MustCompile(`&#(\d+);`)
+)
+
 func htmlToText(html string) string {
 	replacer := strings.NewReplacer("&nbsp;", " ", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&amp;", "&")
-	text := regexp.MustCompile(`<(script|style|noscript)[\s\S]*?</\1>`).ReplaceAllString(html, " ")
-	text = regexp.MustCompile(`<[^>]+>`).ReplaceAllString(text, " ")
+	text := scriptBlockRE.ReplaceAllString(html, " ")
+	text = styleBlockRE.ReplaceAllString(text, " ")
+	text = noScriptRE.ReplaceAllString(text, " ")
+	text = tagRE.ReplaceAllString(text, " ")
 	text = replacer.Replace(text)
-	text = regexp.MustCompile(`(?i)&#x([0-9a-f]+);`).ReplaceAllStringFunc(text, func(m string) string {
-		parts := strings.SplitN(strings.TrimSuffix(strings.TrimPrefix(m, "&#x"), ";"), "x", 2)
-		value, _ := strconv.ParseInt(parts[len(parts)-1], 16, 32)
+	text = hexEntityRE.ReplaceAllStringFunc(text, func(m string) string {
+		// m is always "&#" + x/X + hex digits + ";".
+		value, _ := strconv.ParseInt(m[3:len(m)-1], 16, 32)
 		return string(rune(value))
 	})
-	text = regexp.MustCompile(`&#(\d+);`).ReplaceAllStringFunc(text, func(m string) string {
-		value, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(m, "&#"), ";"))
+	text = decEntityRE.ReplaceAllStringFunc(text, func(m string) string {
+		// m is always "&#" + decimal digits + ";".
+		value, _ := strconv.Atoi(m[2 : len(m)-1])
 		return string(rune(value))
 	})
 	return strings.Join(strings.Fields(text), " ")
