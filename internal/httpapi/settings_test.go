@@ -11,6 +11,7 @@ import (
 
 	"github.com/liyu1981/pi-durable-assistant/internal/config"
 	"github.com/liyu1981/pi-durable-assistant/internal/runtime"
+	"github.com/liyu1981/pi-durable-assistant/internal/settings"
 )
 
 func newTestServerWithModels(t *testing.T, models string) *testClient {
@@ -21,12 +22,16 @@ func newTestServerWithModels(t *testing.T, models string) *testClient {
 	t.Cleanup(provider.Close)
 	cfg := config.Config{
 		DataDir: t.TempDir(), Password: "secret",
-		API: "openai-completions", BaseURL: provider.URL + "/v1",
-		APIKey: "test-key", Model: "test-model",
-		ContextWindow: 128000, MaxTokens: 8192,
 	}
 	rt, err := runtime.Open(context.Background(), cfg)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.ApplyLLM(context.Background(), settings.Config{
+		API: "openai-completions", BaseURL: provider.URL + "/v1",
+		APIKey: "test-key", Model: "test-model",
+		ContextWindow: 128000, MaxTokens: 8192,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	assets := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html></html>")}}
@@ -108,5 +113,47 @@ func TestLLMSettingsRoutes(t *testing.T) {
 	status, body = client.do("PUT", "/api/settings/llm", map[string]any{"apiKey": ""})
 	if status != http.StatusOK || body["apiKeySet"] != false {
 		t.Fatalf("clearing the key: %d %v", status, body)
+	}
+}
+
+func TestLLMProfileRoutes(t *testing.T) {
+	client := newTestServer(t)
+
+	status, body := client.do("GET", "/api/settings/llm/profiles", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list profiles: %d %v", status, body)
+	}
+	initial, ok := body["profiles"].([]any)
+	if !ok || len(initial) != 1 {
+		t.Fatalf("expected seeded profile: %v", body)
+	}
+
+	status, body = client.do("POST", "/api/settings/llm/profiles", map[string]any{
+		"name": "Second", "api": "openai-completions",
+		"baseURL": "http://127.0.0.1:18789/v1", "model": "second-model",
+		"contextWindow": 128000, "maxTokens": 8192,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create profile: %d %v", status, body)
+	}
+	created := body["profile"].(map[string]any)
+	id := int64(created["id"].(float64))
+
+	status, body = client.do("POST", "/api/settings/llm/profiles/"+fmt.Sprint(id)+"/activate", nil)
+	if status != http.StatusOK {
+		t.Fatalf("activate profile: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/settings/llm", nil)
+	if status != http.StatusOK || body["model"] != "second-model" {
+		t.Fatalf("active settings: %d %v", status, body)
+	}
+
+	status, _ = client.do("DELETE", "/api/settings/llm/profiles/"+fmt.Sprint(id), nil)
+	if status != http.StatusOK {
+		t.Fatalf("delete profile: %d", status)
+	}
+	status, body = client.do("GET", "/api/settings/llm", nil)
+	if status != http.StatusOK || body["model"] != "test-model" {
+		t.Fatalf("fallback after delete: %d %v", status, body)
 	}
 }

@@ -360,3 +360,26 @@ export interface SystemPrompt {
   sections: SystemPromptSection[];
   prompt: string;
 }
+
+/** Saved LLM provider configuration; the API key is never returned. */
+export interface LLMProfile extends LLMSettings {
+  id: number;
+  name: string;
+  active: boolean;
+}
+
+export interface LLMProfiles {
+  profiles: LLMProfile[];
+  activeId: number;
+}
+
+/** Fields accepted when creating or updating a saved profile. */
+export interface LLMProfileInput {
+  name: string;
+  api: string;
+  baseURL: string;
+  apiKey?: string;
+  model: string;
+  contextWindow: number;
+  maxTokens: number;
+}

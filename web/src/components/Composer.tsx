@@ -1,20 +1,30 @@
 import { Cancel01Icon, PaperclipIcon, SendIcon, StopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAtom, useAtomValue } from "jotai/react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { post, sendMessage } from "../api/client";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { activateLLMProfile, getLLMProfiles, post, sendMessage } from "../api/client";
+import {
+  activeLLMProfileIdAtom,
   attachmentsAtom,
   busyAtom,
   currentConversationIdAtom,
   draftAtom,
+  llmProfilesAtom,
   type PendingAttachment,
   sendingAtom,
+  serverInfoAtom,
   steerAtom,
   viewAtom,
 } from "../atoms";
@@ -228,6 +238,9 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   const [draft, setDraft] = useAtom(draftAtom);
   const [attachments, setAttachments] = useAtom(attachmentsAtom);
   const [sending, setSending] = useAtom(sendingAtom);
+  const [profiles, setProfiles] = useAtom(llmProfilesAtom);
+  const [activeProfileId, setActiveProfileId] = useAtom(activeLLMProfileIdAtom);
+  const setServerInfo = useSetAtom(serverInfoAtom);
   const [steer, setSteer] = useAtom(steerAtom);
   const currentId = useAtomValue(currentConversationIdAtom);
   const view = useAtomValue(viewAtom);
@@ -239,6 +252,9 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   const dragDepth = useRef(0);
   const keyFor = makeKeyFactory();
   const [dragging, setDragging] = useState(false);
+  const [desktop, setDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 768px)").matches,
+  );
 
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -321,12 +337,50 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
   }, [addFiles]);
 
   useEffect(() => {
+    let cancelled = false;
+    getLLMProfiles()
+      .then((result) => {
+        if (cancelled) return;
+        setProfiles(result.profiles);
+        setActiveProfileId(result.activeId);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [setActiveProfileId, setProfiles]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const update = () => setDesktop(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
     const element = textareaRef.current;
     if (!element) return;
     element.style.height = "auto";
     const minimum = draft.split("\n").length * 24;
     element.style.height = `${Math.min(Math.max(element.scrollHeight, minimum), 140)}px`;
   }, [draft]);
+
+  const switchProfile = async (id: string) => {
+    const profileId = Number(id);
+    try {
+      const result = await activateLLMProfile(profileId);
+      setActiveProfileId(profileId);
+      setServerInfo((current) =>
+        current ? { ...current, model: result.profile.model, api: result.profile.api } : current,
+      );
+      toast(`${result.profile.name} is now active.`, "success");
+    } catch (error) {
+      toast(
+        `Could not switch profile: ${error instanceof Error ? error.message : String(error)}`,
+        "error",
+      );
+    }
+  };
 
   const submit = async () => {
     if (sending) return;
@@ -451,7 +505,7 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
             ref={textareaRef}
             id="composer-message"
             aria-label="Message"
-            placeholder="Write a message... (Enter to send, Shift+Enter for a new line)"
+            placeholder="Write a message..."
             rows={3}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -469,8 +523,9 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
             }}
             onKeyDown={(event) => {
               if (
+                desktop &&
                 event.key === "Enter" &&
-                !event.shiftKey &&
+                (event.ctrlKey || event.metaKey) &&
                 !composing.current &&
                 !event.nativeEvent.isComposing
               ) {
@@ -482,6 +537,23 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
           />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
             <div className="flex flex-wrap items-center gap-2">
+              {profiles.length > 0 ? (
+                <Select
+                  value={String(activeProfileId ?? "")}
+                  onValueChange={(value) => value && void switchProfile(value)}
+                >
+                  <SelectTrigger className="h-8 w-auto min-w-32" aria-label="Active model profile">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles.map((profile) => (
+                      <SelectItem key={profile.id} value={String(profile.id)}>
+                        {profile.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"
@@ -493,11 +565,11 @@ export function Composer({ onEnsureConversation, onSent }: ComposerProps) {
               </Button>
               {busy ? (
                 <SwitchField label="Steer" checked={steer} onCheckedChange={setSteer} />
-              ) : (
+              ) : desktop ? (
                 <span className="text-xs text-muted-foreground">
-                  Enter to send - Shift+Enter for a new line
+                  Ctrl+Enter to send - Enter for a new line
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {(view?.inbox ?? 0) > 0 ? (

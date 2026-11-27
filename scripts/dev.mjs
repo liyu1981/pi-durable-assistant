@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 // `pnpm dev:demo` (or DEMO=1) runs the deterministic faux provider next to the
 // dev server; plain `pnpm dev` starts the server without it and expects a real
-// provider configured through the environment or the pida.env file.
+// provider configured in the SQLite profiles.
 const demo = process.argv.includes("--demo") || process.env.DEMO === "1";
 
 const env = {
@@ -16,13 +16,7 @@ const env = {
 };
 
 if (demo) {
-  Object.assign(env, {
-    LLM_API: "openai-completions",
-    LLM_BASE_URL: "http://127.0.0.1:18789/v1",
-    LLM_API_KEY: "faux",
-    LLM_MODEL: "faux-1",
-    FAUX_PORT: "18789",
-  });
+  Object.assign(env, { FAUX_PORT: "18789" });
 }
 
 const children = [];
@@ -39,6 +33,49 @@ function start(name, command, args, extraEnv = {}) {
   });
   children.push(child);
   return child;
+}
+
+async function waitForServer() {
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    try {
+      const response = await fetch("https://127.0.0.1:3111/api/info", {
+        headers: { accept: "application/json" },
+      });
+      if (response.ok) return;
+    } catch {
+      // Air is still building the binary or the server is starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("dev server did not become ready on https://127.0.0.1:3111");
+}
+
+async function configureFauxProfile() {
+  const response = await fetch("https://127.0.0.1:3111/api/settings/llm/profiles", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Dev faux",
+      api: "openai-completions",
+      baseURL: "http://127.0.0.1:18789/v1",
+      apiKey: "faux",
+      model: "faux-1",
+      contextWindow: 128000,
+      maxTokens: 8192,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`could not create the dev faux profile: HTTP ${response.status}`);
+  }
+  const body = await response.json();
+  const activate = await fetch(
+    `https://127.0.0.1:3111/api/settings/llm/profiles/${body.profile.id}/activate`,
+    { method: "POST" },
+  );
+  if (!activate.ok) {
+    throw new Error(`could not activate the dev faux profile: HTTP ${activate.status}`);
+  }
+  console.log("dev faux profile created and activated");
 }
 
 async function waitForFaux() {
@@ -92,3 +129,17 @@ air.on("exit", (code) => {
   stop();
   process.exit(code ?? 0);
 });
+
+if (demo) {
+  // The dev server uses a self-signed certificate; only this local helper
+  // trusts it so it can seed the faux profile over the API.
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  try {
+    await waitForServer();
+    await configureFauxProfile();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    stop();
+    process.exit(1);
+  }
+}

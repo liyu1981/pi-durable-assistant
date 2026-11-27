@@ -8,7 +8,7 @@ This document describes how the current Go implementation actually works. Code r
 
 1. `cmd/pida/main.go` parses the CLI. `pida serve` loads `~/.pida/pida.env` when present, applies flag overrides, and resolves the runtime configuration through `internal/config` (`config.go` plus `file.go` for the env-style file), then starts the HTTP/HTTPS listeners.
 2. `runtime.Open` (`internal/runtime/runtime.go`) creates the runtime:
-   - `internal/settings.Open` opens `DATA_DIR/agent.sqlite`, applies pending app migrations, and loads the single `app_llm_config` row. A new database is seeded from the legacy `LLM_*` environment variables; afterwards SQLite is authoritative and the environment is ignored until that row is reset.
+   - `internal/settings.Open` opens `DATA_DIR/agent.sqlite`, applies pending app migrations, and loads the active row from `app_llm_profiles`. Model configuration is only stored in SQLite; there is no LLM environment-variable path. New databases seed one default profile.
    - `createModels` builds a PiG `ai.Models` catalog with one provider (`demo`) from the stored settings. Supported wire protocols are `openai-completions`, `openai-responses`, and `anthropic-messages`. `Runtime.ApplyLLM` replaces that provider in place when the user saves settings, so no restart is needed.
    - `node.OpenNodeSqliteStorage(DATA_DIR/agent.sqlite, ...)` opens the durable store.
    - `harness.CreateRegistry()` installs four extensions: `tools.Assistant`, `tools.Delegate`, `personal.Extension`, and `knowledge.Extension`.

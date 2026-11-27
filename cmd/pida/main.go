@@ -223,7 +223,7 @@ func serve(cfg config.Config) error {
 	}
 	rt, err := runtime.Open(context.Background(), cfg)
 	if err != nil {
-		return fmt.Errorf("startup failed: %s", cfg.Redact(err.Error()))
+		return fmt.Errorf("startup failed: %s", err.Error())
 	}
 	assets, err := fs.Sub(webassets.Dist, "dist")
 	if err != nil {

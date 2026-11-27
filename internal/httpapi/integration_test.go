@@ -16,6 +16,7 @@ import (
 	"github.com/liyu1981/pi-durable-assistant/internal/artifacts"
 	"github.com/liyu1981/pi-durable-assistant/internal/config"
 	"github.com/liyu1981/pi-durable-assistant/internal/runtime"
+	"github.com/liyu1981/pi-durable-assistant/internal/settings"
 )
 
 type testClient struct {
@@ -32,17 +33,18 @@ func newTestServer(t *testing.T) *testClient {
 	}))
 	t.Cleanup(provider.Close)
 	cfg := config.Config{
-		DataDir:       t.TempDir(),
-		Password:      "secret",
-		API:           "openai-completions",
-		BaseURL:       provider.URL + "/v1",
-		APIKey:        "test-key",
-		Model:         "test-model",
-		ContextWindow: 128000,
-		MaxTokens:     8192,
+		DataDir:  t.TempDir(),
+		Password: "secret",
 	}
 	rt, err := runtime.Open(context.Background(), cfg)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.ApplyLLM(context.Background(), settings.Config{
+		API: "openai-completions", BaseURL: provider.URL + "/v1",
+		APIKey: "test-key", Model: "test-model",
+		ContextWindow: 128000, MaxTokens: 8192,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	assets := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>durable assistant</html>")}}

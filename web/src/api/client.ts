@@ -5,6 +5,9 @@ import type {
   ArtifactFiles,
   ArtifactList,
   LLMModelsInput,
+  LLMProfile,
+  LLMProfileInput,
+  LLMProfiles,
   LLMSettings,
   LLMSettingsInput,
   LLMTestResult,
@@ -63,6 +66,29 @@ export function post<T>(path: string, body?: unknown): Promise<T> {
 
 export function put<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function getLLMProfiles(): Promise<LLMProfiles> {
+  return get<LLMProfiles>("/api/settings/llm/profiles");
+}
+
+export function createLLMProfile(value: LLMProfileInput): Promise<{ profile: LLMProfile }> {
+  return post<{ profile: LLMProfile }>("/api/settings/llm/profiles", value);
+}
+
+export function updateLLMProfile(
+  id: number,
+  value: LLMProfileInput,
+): Promise<{ profile: LLMProfile }> {
+  return put<{ profile: LLMProfile }>(`/api/settings/llm/profiles/${id}`, value);
+}
+
+export function deleteLLMProfile(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/settings/llm/profiles/${id}`, { method: "DELETE" });
+}
+
+export function activateLLMProfile(id: number): Promise<{ profile: LLMProfile }> {
+  return post<{ profile: LLMProfile }>(`/api/settings/llm/profiles/${id}/activate`);
 }
 
 export function getLLMSettings(): Promise<LLMSettings> {

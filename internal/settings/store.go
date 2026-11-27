@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/liyu1981/pi-durable-assistant/internal/sqlutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -35,6 +37,28 @@ var migrations = []migration{
 			max_tokens INTEGER NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
+	},
+	{
+		version: 2,
+		name:    "llm_profiles",
+		statement: `CREATE TABLE IF NOT EXISTS app_llm_profiles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			api TEXT NOT NULL,
+			base_url TEXT NOT NULL,
+			api_key TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL,
+			context_window INTEGER NOT NULL,
+			max_tokens INTEGER NOT NULL,
+			updated_at TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 0
+		)`,
+	},
+	{
+		version: 3,
+		name:    "llm_profiles_one_active",
+		statement: `CREATE UNIQUE INDEX IF NOT EXISTS app_llm_profiles_one_active
+			ON app_llm_profiles(is_active) WHERE is_active = 1`,
 	},
 }
 
@@ -70,6 +94,10 @@ func Open(path string, defaults Config) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := store.ensureProfiles(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -92,7 +120,12 @@ func (s *Store) migrate() error {
 		}
 		// Setting user_version in the same transaction makes a failed step
 		// retryable on the next start.
-		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, step.version)); err != nil {
+		versionSQL, err := sqlutil.Format(`PRAGMA user_version = %d`, sqlutil.Int(step.version))
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("recording migration %d: %w", step.version, err)
+		}
+		if _, err := tx.Exec(versionSQL); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("recording migration %d: %w", step.version, err)
 		}
@@ -113,10 +146,20 @@ func (s *Store) seed(defaults Config) error {
 	return err
 }
 
-// Load returns the single stored configuration.
+// Load returns the active stored configuration.
 func (s *Store) Load() (Config, error) {
 	var cfg Config
 	err := s.db.QueryRow(`SELECT api, base_url, api_key, model, context_window, max_tokens, updated_at
+		FROM app_llm_profiles WHERE is_active = 1`).Scan(
+		&cfg.API, &cfg.BaseURL, &cfg.APIKey, &cfg.Model,
+		&cfg.ContextWindow, &cfg.MaxTokens, &cfg.UpdatedAt)
+	if err == nil {
+		return cfg, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return cfg, err
+	}
+	err = s.db.QueryRow(`SELECT api, base_url, api_key, model, context_window, max_tokens, updated_at
 		FROM app_llm_config WHERE id = 1`).Scan(
 		&cfg.API, &cfg.BaseURL, &cfg.APIKey, &cfg.Model,
 		&cfg.ContextWindow, &cfg.MaxTokens, &cfg.UpdatedAt)
@@ -133,9 +176,16 @@ func (s *Store) Save(cfg Config) error {
 		return err
 	}
 	cfg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	_, err := s.db.Exec(`UPDATE app_llm_config SET
+	if _, err := s.db.Exec(`UPDATE app_llm_config SET
 		api = ?, base_url = ?, api_key = ?, model = ?, context_window = ?, max_tokens = ?, updated_at = ?
 		WHERE id = 1`,
+		cfg.API, cfg.BaseURL, cfg.APIKey, cfg.Model,
+		cfg.ContextWindow, cfg.MaxTokens, cfg.UpdatedAt); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`UPDATE app_llm_profiles SET
+		api = ?, base_url = ?, api_key = ?, model = ?, context_window = ?, max_tokens = ?, updated_at = ?
+		WHERE is_active = 1`,
 		cfg.API, cfg.BaseURL, cfg.APIKey, cfg.Model,
 		cfg.ContextWindow, cfg.MaxTokens, cfg.UpdatedAt)
 	return err

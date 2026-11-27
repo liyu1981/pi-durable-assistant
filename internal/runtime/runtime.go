@@ -68,20 +68,6 @@ func boolPtr(value bool) *bool { return &value }
 
 func stringPtr(value string) *string { return &value }
 
-// llmFromEnv seeds a brand-new database from the legacy environment
-// variables. Once a row exists, the database is authoritative and env changes
-// are ignored until the settings row is reset.
-func llmFromEnv(cfg config.Config) settings.Config {
-	return settings.Config{
-		API:           cfg.API,
-		BaseURL:       cfg.BaseURL,
-		APIKey:        cfg.APIKey,
-		Model:         cfg.Model,
-		ContextWindow: cfg.ContextWindow,
-		MaxTokens:     cfg.MaxTokens,
-	}
-}
-
 // buildProvider constructs the single provider from stored settings. The
 // provider ID stays constant so it can be replaced without a restart.
 func buildProvider(cfg settings.Config) (*ai.ModelsProvider, error) {
@@ -167,7 +153,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		return nil, err
 	}
 	dbPath := filepath.Join(cfg.DataDir, "agent.sqlite")
-	store, err := settings.Open(dbPath, llmFromEnv(cfg))
+	store, err := settings.Open(dbPath, settings.Defaults())
 	if err != nil {
 		return nil, err
 	}
@@ -312,22 +298,33 @@ func (r *Runtime) Redact(value string) string {
 	return RedactValue(secret, value)
 }
 
-// ApplyLLM stores a new configuration and switches the live provider to it.
-// Existing conversations are updated too, so the next message in an open chat
-// uses the new model without a restart.
+// ApplyLLM updates the active profile and switches the live provider to it.
 func (r *Runtime) ApplyLLM(ctx context.Context, next settings.Config) error {
 	if err := next.Validate(); err != nil {
 		return err
 	}
+	if err := r.Settings.Save(next); err != nil {
+		return err
+	}
+	return r.switchLLM(ctx, next)
+}
+
+// SwitchLLMProfile activates a saved profile and switches the live provider.
+func (r *Runtime) SwitchLLMProfile(ctx context.Context, id int64) error {
+	next, err := r.Settings.ActivateProfile(id)
+	if err != nil {
+		return err
+	}
+	return r.switchLLM(ctx, next)
+}
+
+// switchLLM is the live half of ApplyLLM: it never writes settings.
+func (r *Runtime) switchLLM(ctx context.Context, next settings.Config) error {
 	provider, err := buildProvider(next)
 	if err != nil {
 		return err
 	}
 	previous := r.LLMConfig()
-	if err := r.Settings.Save(next); err != nil {
-		return err
-	}
-
 	r.Models.SetProvider(provider)
 	r.redactor.set(next.APIKey)
 	ref := durable.ModelRef{Provider: settings.ProviderID, ModelId: next.Model}

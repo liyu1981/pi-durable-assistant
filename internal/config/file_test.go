@@ -55,10 +55,10 @@ MY_CUSTOM=kept
 	if values["MY_CUSTOM"] != "kept" {
 		t.Fatalf("custom key not preserved")
 	}
-	if report.Preserved != 3 {
+	if report.Preserved != 2 {
 		t.Fatalf("Preserved = %d", report.Preserved)
 	}
-	if report.Custom != 1 {
+	if report.Custom != 2 {
 		t.Fatalf("Custom = %d", report.Custom)
 	}
 	if !strings.Contains(merged, "# pida configuration file, version 1") {
@@ -86,8 +86,8 @@ func TestMergeAddsMissingKeys(t *testing.T) {
 	if values["HTTP_MODE"] != "http" {
 		t.Fatalf("HTTP_MODE = %q", values["HTTP_MODE"])
 	}
-	if values["LLM_CONTEXT_WINDOW"] != "128000" {
-		t.Fatalf("LLM_CONTEXT_WINDOW = %q", values["LLM_CONTEXT_WINDOW"])
+	if values["ARTIFACT_MAX_TOTAL_BYTES"] != "4GB" {
+		t.Fatalf("ARTIFACT_MAX_TOTAL_BYTES = %q", values["LLM_CONTEXT_WINDOW"])
 	}
 	if report.Added == 0 {
 		t.Fatalf("expected added keys, report = %+v", report)

@@ -51,24 +51,6 @@ DEMO_PASSWORD=
 # Set to "production" to require a password and bind all interfaces.
 # NODE_ENV=production
 
-# ---------------------------------------------------------------- model
-# Provider protocol: openai-completions, openai-responses, or anthropic-messages.
-LLM_API=openai-completions
-
-# Provider base URL, for example https://api.openai.com/v1.
-LLM_BASE_URL=
-
-# Provider API key. The value saved in System settings -> Models (SQLite) wins
-# over this file once a model has been configured in the UI.
-LLM_API_KEY=
-
-# Model identifier, for example gpt-4.1-mini.
-LLM_MODEL=
-
-# Context window and maximum output tokens advertised to the model.
-LLM_CONTEXT_WINDOW=128000
-LLM_MAX_TOKENS=8192
-
 # ---------------------------------------------------------------- notifications
 # Webhook URL for task notifications. Empty disables notifications.
 NOTIFY_WEBHOOK_URL=

@@ -12,12 +12,6 @@ type Config struct {
 	Port          int
 	DataDir       string
 	Password      string
-	API           string
-	BaseURL       string
-	APIKey        string
-	Model         string
-	ContextWindow int
-	MaxTokens     int
 	NotifyURL     string
 	NotifyKind    string
 	NotifyMode    string
@@ -61,12 +55,6 @@ func Load() Config {
 		Port:          envInt("PORT", 3000),
 		DataDir:       env("DATA_DIR", "./data"),
 		Password:      os.Getenv("DEMO_PASSWORD"),
-		API:           env("LLM_API", "openai-completions"),
-		BaseURL:       os.Getenv("LLM_BASE_URL"),
-		APIKey:        os.Getenv("LLM_API_KEY"),
-		Model:         os.Getenv("LLM_MODEL"),
-		ContextWindow: envInt("LLM_CONTEXT_WINDOW", 128000),
-		MaxTokens:     envInt("LLM_MAX_TOKENS", 8192),
 		NotifyURL:     os.Getenv("NOTIFY_WEBHOOK_URL"),
 		NotifyKind:    env("NOTIFY_WEBHOOK_KIND", "generic"),
 		NotifyMode:    env("NOTIFY_MODE", "errors"),
@@ -80,14 +68,6 @@ func Load() Config {
 		CertFile:      env("TLS_CERT_FILE", "certs/localhost.pem"),
 		KeyFile:       env("TLS_KEY_FILE", "certs/localhost-key.pem"),
 	}
-}
-
-// Redact removes the configured API key from text before logging or display.
-func (c Config) Redact(value string) string {
-	if len(c.APIKey) >= 8 {
-		return strings.ReplaceAll(value, c.APIKey, "***")
-	}
-	return value
 }
 
 func httpMode() string {

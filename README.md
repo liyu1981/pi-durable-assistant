@@ -57,23 +57,21 @@ Artifacts are stored under `DATA_DIR/artifacts`; the agent creates, reads, updat
 
 ## Connect a real model
 
-Build and start the server, then open **System settings** in the app header (or the tools menu on small screens) and choose the **Models** tab:
+Build and start the server, then open **System settings** in the app header and choose **Model providers**:
 
 ```bash
 pnpm build
 ./dist/pida serve
 ```
 
-Pick a protocol (`openai-completions`, `openai-responses`, `anthropic-messages`), enter the base URL, model and optional API key, then use **Test connection** before **Save settings**. Changes are stored in the `app_llm_config` table of `DATA_DIR/agent.sqlite` and applied to the running server immediately; the stored key is never returned to the browser.
-
-For a brand-new database only, the legacy `LLM_API`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_CONTEXT_WINDOW` and `LLM_MAX_TOKENS` variables seed the first row (handy for `pnpm dev:demo`). Once the row exists, SQLite is authoritative and changing `.env` has no effect until that row is reset.
+Create named provider profiles with a protocol (`openai-completions`, `openai-responses`, `anthropic-messages`), base URL, model and optional API key. Use **Test connection** before **Save profile**. Profiles are stored in `DATA_DIR/agent.sqlite`; the stored key is never returned to the browser. Switch the active profile anytime from the selector in the composer.
 
 With `DEMO_PASSWORD` set the server binds `0.0.0.0:3000`; without it, loopback only. Production requires a password.
 
 ## Self-host
 
 ```bash
-cp .env.example .env      # set DEMO_PASSWORD and model configuration
+cp .env.example .env      # set DEMO_PASSWORD and server options
 pnpm docker               # docker compose build
 docker compose up -d
 docker compose ps

@@ -118,7 +118,7 @@ func simplifyView(ctx context.Context, server *Server, conversation harness.Conv
 			}
 			item := EntryView{ID: int64(entry.Id), Kind: "assistant", Text: sb.String(), ToolCalls: calls, Timestamp: typed.Timestamp}
 			if typed.StopReason == ai.StopReasonError {
-				item.Error = friendlyModelError(server.Config.Redact(typed.ErrorMessage))
+				item.Error = friendlyModelError(typed.ErrorMessage)
 			}
 			payload.Entries = append(payload.Entries, item)
 		case ai.ToolResultMessage:

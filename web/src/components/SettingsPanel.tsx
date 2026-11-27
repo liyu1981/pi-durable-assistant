@@ -1,6 +1,6 @@
 import { CheckmarkCircle02Icon, SettingsIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAtomValue, useSetAtom } from "jotai/react";
+import { useSetAtom } from "jotai/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,9 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchLLMModels, getLLMSettings, saveLLMSettings, testLLMSettings } from "../api/client";
-import type { LLMSettings, LLMSettingsInput } from "../api/types";
-import { serverInfoAtom } from "../atoms";
+import {
+  activateLLMProfile,
+  createLLMProfile,
+  deleteLLMProfile,
+  fetchLLMModels,
+  getLLMProfiles,
+  testLLMSettings,
+  updateLLMProfile,
+} from "../api/client";
+import type { LLMSettingsInput } from "../api/types";
+import { activeLLMProfileIdAtom, llmProfilesAtom, serverInfoAtom } from "../atoms";
 import { useToast } from "../lib/useToast";
 import { Field, LoadingState, StatusMessage } from "./ui";
 
@@ -34,6 +42,7 @@ const APIS = [
 ] as const;
 
 interface FormState {
+  name: string;
   api: string;
   baseURL: string;
   model: string;
@@ -42,13 +51,21 @@ interface FormState {
   apiKey: string;
 }
 
-function toForm(settings: LLMSettings): FormState {
+function toForm(profile: {
+  name: string;
+  api: string;
+  baseURL: string;
+  model: string;
+  contextWindow: number;
+  maxTokens: number;
+}): FormState {
   return {
-    api: settings.api,
-    baseURL: settings.baseURL,
-    model: settings.model,
-    contextWindow: String(settings.contextWindow),
-    maxTokens: String(settings.maxTokens),
+    name: profile.name,
+    api: profile.api,
+    baseURL: profile.baseURL,
+    model: profile.model,
+    contextWindow: String(profile.contextWindow),
+    maxTokens: String(profile.maxTokens),
     apiKey: "",
   };
 }
@@ -64,6 +81,7 @@ function validateBaseURL(form: FormState): string | null {
 function validate(form: FormState): string | null {
   const baseError = validateBaseURL(form);
   if (baseError) return baseError;
+  if (!form.name.trim()) return "Profile name is required.";
   if (!form.model.trim()) return "Model is required.";
   const windowSize = Number(form.contextWindow);
   const maxTokens = Number(form.maxTokens);
@@ -76,33 +94,55 @@ function validate(form: FormState): string | null {
   return null;
 }
 
-/** Model provider settings, persisted in SQLite and applied without a restart. */
+/** Named LLM provider profiles, persisted in SQLite and applied without restart. */
 export function SettingsPanel() {
   const setServerInfo = useSetAtom(serverInfoAtom);
-  const info = useAtomValue(serverInfoAtom);
+  const setProfiles = useSetAtom(llmProfilesAtom);
+  const setActiveId = useSetAtom(activeLLMProfileIdAtom);
   const toast = useToast();
-  const [loaded, setLoaded] = useState<LLMSettings | null>(null);
+  const [profiles, setLocalProfiles] = useState<
+    Awaited<ReturnType<typeof getLLMProfiles>>["profiles"]
+  >([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [busy, setBusy] = useState<"test" | "save" | "models" | null>(null);
 
+  const syncProfiles = useCallback(
+    async (data: Awaited<ReturnType<typeof getLLMProfiles>>) => {
+      setLocalProfiles(data.profiles);
+      setProfiles(data.profiles);
+      setActiveId(data.activeId);
+      const selected = data.profiles.find((item) => item.id === data.activeId) ?? data.profiles[0];
+      setSelectedId(selected?.id ?? null);
+      setForm(selected ? toForm(selected) : null);
+    },
+    [setActiveId, setProfiles],
+  );
+
+  const refresh = useCallback(async () => {
+    try {
+      await syncProfiles(await getLLMProfiles());
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [syncProfiles]);
+
   useEffect(() => {
-    let cancelled = false;
-    getLLMSettings()
-      .then((settings) => {
-        if (cancelled) return;
-        setLoaded(settings);
-        setForm(toForm(settings));
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void refresh();
+  }, [refresh]);
+
+  const selectProfile = (id: string) => {
+    const profile = profiles.find((item) => item.id === Number(id));
+    if (!profile) return;
+    setSelectedId(profile.id);
+    setForm(toForm(profile));
+    setModels([]);
+    setNotice(null);
+  };
 
   const update = useCallback((key: keyof FormState, value: string) => {
     setForm((previous) => (previous ? { ...previous, [key]: value } : previous));
@@ -119,8 +159,6 @@ export function SettingsPanel() {
       contextWindow: Number(form.contextWindow),
       maxTokens: Number(form.maxTokens),
     };
-    // A blank field means "keep the stored key"; an explicit clear has its own
-    // button so a save of other fields cannot accidentally remove a secret.
     if (form.apiKey.trim()) value.apiKey = form.apiKey.trim();
     return value;
   }, [form]);
@@ -139,12 +177,12 @@ export function SettingsPanel() {
     setNotice(null);
     setBusy("models");
     try {
-      const input: { api: string; baseURL: string; apiKey?: string } = {
+      const candidate: { api: string; baseURL: string; apiKey?: string } = {
         api: form.api,
         baseURL: form.baseURL.trim(),
       };
-      if (form.apiKey.trim()) input.apiKey = form.apiKey.trim();
-      const result = await fetchLLMModels(input);
+      if (form.apiKey.trim()) candidate.apiKey = form.apiKey.trim();
+      const result = await fetchLLMModels(candidate);
       setModels(result.models);
       setNotice(
         result.models.length > 0
@@ -172,8 +210,7 @@ export function SettingsPanel() {
     try {
       const result = await testLLMSettings(value);
       setModels(result.models);
-      const names = result.models.slice(0, 3).join(", ");
-      setNotice(`Connected in ${result.latencyMs} ms${names ? `. Models: ${names}` : "."}`);
+      setNotice(`Connected in ${result.latencyMs} ms.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -184,21 +221,26 @@ export function SettingsPanel() {
   const save = async () => {
     const value = input();
     const invalid = value ? validate(form as FormState) : "Settings are still loading.";
-    if (invalid || !value) {
-      setError(invalid);
+    if (invalid || !value || selectedId === null) {
+      setError(invalid ?? "No profile selected.");
       return;
     }
     setError(null);
     setNotice(null);
     setBusy("save");
     try {
-      const saved = await saveLLMSettings(value);
-      setLoaded(saved);
+      const result = await updateLLMProfile(selectedId, {
+        name: (form as FormState).name,
+        ...value,
+      });
       setForm((previous) => (previous ? { ...previous, apiKey: "" } : previous));
-      if (info) {
-        setServerInfo({ ...info, model: saved.model, api: saved.api });
+      if (result.profile.active) {
+        setServerInfo((current) =>
+          current ? { ...current, model: result.profile.model, api: result.profile.api } : current,
+        );
       }
-      toast(`Model settings saved. Active model: ${saved.model}.`, "success");
+      await refresh();
+      toast(`${result.profile.name} saved.`, "success");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -206,17 +248,54 @@ export function SettingsPanel() {
     }
   };
 
-  const clearKey = async () => {
+  const create = async () => {
     const value = input();
-    if (!value) return;
-    value.apiKey = "";
+    const invalid = value ? validate(form as FormState) : "Settings are still loading.";
+    if (invalid || !value) {
+      setError(invalid);
+      return;
+    }
     setError(null);
     setBusy("save");
     try {
-      const saved = await saveLLMSettings(value);
-      setLoaded(saved);
-      setForm((previous) => (previous ? { ...previous, apiKey: "" } : previous));
-      toast("Stored API key removed.", "success");
+      const result = await createLLMProfile({ name: (form as FormState).name, ...value });
+      await refresh();
+      setSelectedId(result.profile.id);
+      setForm(toForm(result.profile));
+      toast(`${result.profile.name} created.`, "success");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    if (selectedId === null) return;
+    setError(null);
+    setBusy("save");
+    try {
+      await deleteLLMProfile(selectedId);
+      await refresh();
+      toast("Profile removed.", "success");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const activate = async () => {
+    if (selectedId === null) return;
+    setError(null);
+    setBusy("save");
+    try {
+      const result = await activateLLMProfile(selectedId);
+      await refresh();
+      setServerInfo((current) =>
+        current ? { ...current, model: result.profile.model, api: result.profile.api } : current,
+      );
+      toast(`${result.profile.name} is now active.`, "success");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -229,14 +308,14 @@ export function SettingsPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-          Model provider
+          Model providers
         </CardTitle>
         <CardDescription>
-          Saved in SQLite and applied immediately. The API key is never sent back to the browser.
+          Save multiple provider profiles in SQLite. Switch the active profile from the composer.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!form || !loaded ? (
+        {!form ? (
           error ? (
             <StatusMessage>{error}</StatusMessage>
           ) : (
@@ -244,6 +323,28 @@ export function SettingsPanel() {
           )
         ) : (
           <>
+            <div className="grid gap-2">
+              <Label>Profile</Label>
+              <Select
+                value={String(selectedId)}
+                onValueChange={(value) => value && selectProfile(value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={String(profile.id)}>
+                      {profile.name}
+                      {profile.active ? " (active)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Field label="Profile name">
+              <Input value={form.name} onChange={(event) => update("name", event.target.value)} />
+            </Field>
             <div className="grid gap-2">
               <Label>Protocol</Label>
               <Select value={form.api} onValueChange={(value) => value && update("api", value)}>
@@ -267,15 +368,11 @@ export function SettingsPanel() {
                 spellCheck={false}
               />
             </Field>
-            <Field
-              label={loaded.apiKeySet ? "API key (a key is already stored)" : "API key (optional)"}
-            >
+            <Field label="API key (optional)">
               <Input
                 type="password"
                 value={form.apiKey}
-                placeholder={
-                  loaded.apiKeySet ? "Leave blank to keep the stored key" : "No key stored"
-                }
+                placeholder="Leave blank to keep the stored key"
                 autoComplete="off"
                 onChange={(event) => update("apiKey", event.target.value)}
               />
@@ -346,21 +443,23 @@ export function SettingsPanel() {
             ) : null}
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void save()} disabled={busy !== null}>
-                {busy === "save" ? "Saving..." : "Save settings"}
+                {busy === "save" ? "Saving..." : "Save profile"}
+              </Button>
+              <Button variant="outline" onClick={() => void create()} disabled={busy !== null}>
+                New profile
+              </Button>
+              <Button variant="outline" onClick={() => void activate()} disabled={busy !== null}>
+                Use in chat
               </Button>
               <Button variant="outline" onClick={() => void test()} disabled={busy !== null}>
                 {busy === "test" ? "Testing..." : "Test connection"}
               </Button>
-              {loaded.apiKeySet ? (
-                <Button variant="ghost" onClick={() => void clearKey()} disabled={busy !== null}>
-                  Remove stored key
+              {profiles.length > 1 ? (
+                <Button variant="ghost" onClick={() => void remove()} disabled={busy !== null}>
+                  Delete profile
                 </Button>
               ) : null}
             </div>
-            <p className="text-xs text-muted-foreground">
-              The model change applies to new messages in existing conversations. Environment
-              variables are only used the first time this database is opened.
-            </p>
           </>
         )}
       </CardContent>

@@ -4,6 +4,7 @@ import type {
   Conversation,
   KnowledgeHit,
   KnowledgePage,
+  LLMProfile,
   Management,
   PersonalData,
   ServerInfo,
@@ -26,6 +27,8 @@ export const busyAtom = atom((get) => {
 });
 export const sseStatusAtom = atom<SseStatus>("connecting");
 export const serverInfoAtom = atom<ServerInfo | null>(null);
+export const llmProfilesAtom = atom<LLMProfile[]>([]);
+export const activeLLMProfileIdAtom = atom<number | null>(null);
 
 export interface PendingAttachment {
   kind: "image" | "text";
