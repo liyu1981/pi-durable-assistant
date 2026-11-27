@@ -90,6 +90,7 @@ function useViewerOptions(compact: boolean): ViewerOptions | null {
       rendererMode: "replace",
       theme,
       toolbar: compact ? false : { position: "bottom-right" },
+      text: { wrapLongLines: true },
     } as ViewerOptions;
   }, [preset, theme, compact]);
 }
