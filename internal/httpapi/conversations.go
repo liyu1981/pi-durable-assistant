@@ -49,6 +49,7 @@ type EntryView struct {
 	ToolCallID  string             `json:"toolCallId,omitempty"`
 	Name        string             `json:"name,omitempty"`
 	IsError     bool               `json:"isError,omitempty"`
+	Timestamp   int64              `json:"timestamp,omitempty"`
 }
 
 type ViewPayload struct {
@@ -115,7 +116,7 @@ func simplifyView(ctx context.Context, server *Server, conversation harness.Conv
 					calls = append(calls, ToolCallView{ID: block.ID, Name: block.Name, Args: block.ArgumentsValue()})
 				}
 			}
-			item := EntryView{ID: int64(entry.Id), Kind: "assistant", Text: sb.String(), ToolCalls: calls}
+			item := EntryView{ID: int64(entry.Id), Kind: "assistant", Text: sb.String(), ToolCalls: calls, Timestamp: typed.Timestamp}
 			if typed.StopReason == ai.StopReasonError {
 				item.Error = friendlyModelError(server.Config.Redact(typed.ErrorMessage))
 			}

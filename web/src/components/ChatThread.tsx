@@ -2,10 +2,12 @@ import {
   Alert02Icon,
   ArrowDown01Icon,
   ArrowUpRightIcon,
+  Copy01Icon,
   GitForkIcon,
   Loading03Icon,
   Message01Icon,
   SparklesIcon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomValue, useSetAtom } from "jotai/react";
@@ -18,7 +20,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { imageUrl } from "../api/client";
 import type { LiveToolSlot, ToolCallView, ToolEntry, ViewEntry, ViewPayload } from "../api/types";
 import { busyAtom, currentConversationIdAtom, draftAtom, sseStatusAtom, viewAtom } from "../atoms";
-import { extractLiveInfo, formatFileSize, formatToolArgs, usageNumbers } from "../lib/format";
+import {
+  extractLiveInfo,
+  formatFileSize,
+  formatTime,
+  formatToolArgs,
+  usageNumbers,
+} from "../lib/format";
 import { Markdown } from "./Markdown";
 import { EmptyState, LoadingState, toneVariant } from "./ui";
 
@@ -136,7 +144,16 @@ function ToolCard({
             className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
           />
           <CardTitle className="min-w-0 flex-1 truncate text-sm">{displayName}</CardTitle>
-          <Badge variant={toneVariant(isError ? "danger" : result ? "success" : "warning")}>
+          <Badge
+            variant="outline"
+            className={
+              isError
+                ? "border-destructive/20 bg-destructive/5 text-destructive"
+                : result
+                  ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300"
+                  : "border-border bg-muted/40 text-muted-foreground"
+            }
+          >
             {status}
           </Badge>
         </button>
@@ -190,6 +207,8 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
   const setDraft = useSetAtom(draftAtom);
   const scrollHostRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const copiedTimer = useRef<number | null>(null);
 
   const getViewport = useCallback(
     () =>
@@ -207,6 +226,13 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
     viewport.addEventListener("scroll", onScroll);
     return () => viewport.removeEventListener("scroll", onScroll);
   }, [getViewport]);
+
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (view && nearBottom.current) {
@@ -318,9 +344,33 @@ export function ChatThread({ onFork, onSelectConversation }: ChatThreadProps) {
       return (
         <div key={entry.id} className="flex flex-col gap-3">
           {entry.text.trim() ? (
-            <div>
-              <Markdown text={entry.text} />
-            </div>
+            <>
+              <div>
+                <Markdown text={entry.text} />
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Copy message"
+                  title="Copy message"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(entry.text).then(() => {
+                      setCopiedId(entry.id);
+                      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+                      copiedTimer.current = window.setTimeout(() => setCopiedId(null), 1200);
+                    });
+                  }}
+                >
+                  <HugeiconsIcon
+                    icon={copiedId === entry.id ? Tick02Icon : Copy01Icon}
+                    strokeWidth={2}
+                    className={copiedId === entry.id ? "text-emerald-600" : ""}
+                  />
+                </Button>
+                <span>{entry.timestamp ? formatTime(entry.timestamp) : ""}</span>
+              </div>
+            </>
           ) : null}
           {calls.map((call) => {
             const id = String(call.id);

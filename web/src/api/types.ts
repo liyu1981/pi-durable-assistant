@@ -32,6 +32,7 @@ export interface AssistantEntry {
   text: string;
   toolCalls?: ToolCallView[];
   error?: string;
+  timestamp?: number;
 }
 
 export interface ToolEntry {
