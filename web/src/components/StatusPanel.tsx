@@ -130,7 +130,7 @@ export function StatusPanel({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "h-full w-[300px] shrink-0 overflow-y-auto border-l border-border bg-muted px-4 py-6",
+        "h-full w-[480px] shrink-0 overflow-y-auto border-l border-border bg-muted px-4 py-6",
         className,
       )}
       aria-label="Status and notes"

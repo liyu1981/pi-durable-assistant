@@ -95,6 +95,9 @@ export const drawerAtom = atom<{
   panel: "tasks",
 });
 
+/** Tab shown in the always-visible desktop right panel. */
+export const rightPanelTabAtom = atom<DrawerPanel>("status");
+
 export interface Toast {
   id: number;
   message: string;

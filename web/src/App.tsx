@@ -33,6 +33,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { exportUrl, get, post, subscribeView } from "./api/client";
 import type { Conversation, ServerInfo } from "./api/types";
+import type { DrawerPanel } from "./atoms";
 import {
   conversationFilterAtom,
   conversationsAtom,
@@ -41,6 +42,7 @@ import {
   leftPanelCollapsedAtom,
   pendingRemoveAtom,
   rightPanelCollapsedAtom,
+  rightPanelTabAtom,
   serverInfoAtom,
   sseStatusAtom,
   systemSettingsOpenAtom,
@@ -49,9 +51,8 @@ import {
 import { ArtifactFocusDialog, MermaidLightbox } from "./components/ArtifactViewer";
 import { ChatThread } from "./components/ChatThread";
 import { Composer } from "./components/Composer";
-import { Drawer } from "./components/Drawer";
+import { Drawer, ManagementTabs } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
-import { StatusPanel } from "./components/StatusPanel";
 import { SystemSettingsDialog } from "./components/SystemSettingsDialog";
 import { ToastContainer } from "./components/ToastContainer";
 import { useToast } from "./lib/useToast";
@@ -84,6 +85,14 @@ export function App() {
   const setFilter = useSetAtom(conversationFilterAtom);
   const setPendingRemove = useSetAtom(pendingRemoveAtom);
   const setDrawer = useSetAtom(drawerAtom);
+  const [rightTab, setRightTab] = useAtom(rightPanelTabAtom);
+  const openPanel = useCallback(
+    (panel: DrawerPanel) => {
+      setDrawer({ open: true, panel });
+      setRightTab(panel);
+    },
+    [setDrawer, setRightTab],
+  );
   const setSystemSettingsOpen = useSetAtom(systemSettingsOpenAtom);
   const conversations = useAtomValue(conversationsAtom);
   const view = useAtomValue(viewAtom);
@@ -290,36 +299,36 @@ export function App() {
               }
             />
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "status" })}>
+              <DropdownMenuItem onClick={() => openPanel("status")}>
                 <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
                 Status
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "system" })}>
+              <DropdownMenuItem onClick={() => openPanel("system")}>
                 <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
                 System prompt
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "tasks" })}>
+              <DropdownMenuItem onClick={() => openPanel("tasks")}>
                 <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
                 Tasks
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "memory" })}>
+              <DropdownMenuItem onClick={() => openPanel("memory")}>
                 <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
                 Memory
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "skills" })}>
+              <DropdownMenuItem onClick={() => openPanel("skills")}>
                 <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
                 Skills
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "tools" })}>
+              <DropdownMenuItem onClick={() => openPanel("tools")}>
                 <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
                 Tools
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "knowledge" })}>
+              <DropdownMenuItem onClick={() => openPanel("knowledge")}>
                 <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
                 Knowledge
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDrawer({ open: true, panel: "artifacts" })}>
+              <DropdownMenuItem onClick={() => openPanel("artifacts")}>
                 <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
                 Files
               </DropdownMenuItem>
@@ -329,77 +338,6 @@ export function App() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden md:inline-flex lg:hidden"
-            onClick={() => setDrawer({ open: true, panel: "status" })}
-          >
-            Status
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "system" })}
-          >
-            <HugeiconsIcon icon={SettingsIcon} strokeWidth={2} />
-            System prompt
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden md:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "tasks" })}
-          >
-            <HugeiconsIcon icon={ActivityIcon} strokeWidth={2} />
-            Tasks
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden md:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "memory" })}
-          >
-            <HugeiconsIcon icon={BrainIcon} strokeWidth={2} />
-            Memory
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "skills" })}
-          >
-            <HugeiconsIcon icon={MagicWand01Icon} strokeWidth={2} />
-            Skills
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "tools" })}
-          >
-            <HugeiconsIcon icon={ToolboxIcon} strokeWidth={2} />
-            Tools
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden md:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "knowledge" })}
-          >
-            <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
-            Knowledge
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden md:inline-flex"
-            onClick={() => setDrawer({ open: true, panel: "artifacts" })}
-          >
-            <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
-            Files
-          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -447,7 +385,7 @@ export function App() {
           className={[
             "relative flex min-w-0 flex-1 flex-col border-r border-border bg-muted lg:border-r-0",
             leftCollapsed ? "md:ml-0" : "md:ml-[260px]",
-            rightCollapsed ? "lg:mr-0" : "lg:mr-[380px]",
+            rightCollapsed ? "lg:mr-0" : "lg:mr-[480px]",
           ].join(" ")}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-4">
@@ -498,11 +436,15 @@ export function App() {
             "fixed bottom-0 right-0 top-16 z-20 hidden overflow-hidden border-l border-border bg-muted transition-[width,transform] duration-200 lg:block",
             rightCollapsed
               ? "w-0 translate-x-full border-l-0 pointer-events-none"
-              : "w-[380px] translate-x-0",
+              : "w-[480px] translate-x-0",
           ].join(" ")}
         >
           <div className="relative h-full w-full">
-            <StatusPanel className="w-[380px]" />
+            <ManagementTabs
+              value={rightTab}
+              onValueChange={setRightTab}
+              className="h-full min-h-0 gap-0"
+            />
           </div>
         </aside>
 
@@ -526,7 +468,7 @@ export function App() {
           size="icon-sm"
           className={[
             "fixed top-1/2 z-30 hidden mt-8 -translate-y-1/2 rounded-r-none bg-background transition-all duration-200 lg:inline-flex",
-            rightCollapsed ? "right-0" : "right-[380px]",
+            rightCollapsed ? "right-0" : "right-[480px]",
           ].join(" ")}
           aria-label={rightCollapsed ? "Expand status panel" : "Collapse status panel"}
           onClick={() => setRightCollapsed((value) => !value)}
