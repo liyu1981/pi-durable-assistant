@@ -14,3 +14,6 @@ dist/
 
 # local TLS certificates (dev only)
 certs/
+
+# harness/agent state kept outside the repository
+.pi/
