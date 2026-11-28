@@ -80,6 +80,12 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("GET /api/system-prompt", server.getSystemPrompt)
 	mux.HandleFunc("GET /api/knowledge/search", server.searchKnowledge)
 	mux.HandleFunc("GET /api/knowledge/read", server.readKnowledge)
+	mux.HandleFunc("GET /api/knowledge/vaults", server.listKnowledgeVaults)
+	mux.HandleFunc("POST /api/knowledge/vaults", server.createKnowledgeVault)
+	mux.HandleFunc("DELETE /api/knowledge/vaults/{id}", server.deleteKnowledgeVault)
+	mux.HandleFunc("GET /api/knowledge/vaults/{id}/files", server.listKnowledgeFiles)
+	mux.HandleFunc("GET /api/knowledge/vaults/{id}/files/{path...}", server.readKnowledgeFile)
+	mux.HandleFunc("PUT /api/knowledge/vaults/{id}/files/{path...}", server.writeKnowledgeFile)
 	mux.HandleFunc("GET /api/artifacts", server.listArtifacts)
 	mux.HandleFunc("POST /api/artifacts", server.createArtifact)
 	mux.HandleFunc("GET /api/artifacts/{id}", server.getArtifact)
@@ -296,6 +302,125 @@ func contentTypeFor(name string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// Knowledge vault handlers
+
+// listKnowledgeVaults returns all knowledge vaults.
+func (s *Server) listKnowledgeVaults(w http.ResponseWriter, r *http.Request) {
+	vaults, err := s.Runtime.Knowledge.ListVaults()
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(vaults))
+	for _, vault := range vaults {
+		items = append(items, map[string]any{
+			"id":        vault.ID,
+			"name":      vault.Name,
+			"createdAt": vault.CreatedAt.Unix(),
+			"updatedAt": vault.UpdatedAt.Unix(),
+			"pinned":    vault.Pinned,
+			"description": vault.Description,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"vaults": items})
+}
+
+// createKnowledgeVault creates a new knowledge vault.
+func (s *Server) createKnowledgeVault(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r, 4_000)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	name, _ := body["name"].(string)
+	description, _ := body["description"].(string)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	vault, err := s.Runtime.Knowledge.CreateVault(name, description)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"vault": map[string]any{
+		"id":        vault.ID,
+		"name":      vault.Name,
+		"description": vault.Description,
+	}})
+}
+
+// deleteKnowledgeVault deletes a knowledge vault and its files.
+func (s *Server) deleteKnowledgeVault(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.Runtime.Knowledge.DeleteVault(id); err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// listKnowledgeFiles lists the files in a knowledge vault.
+func (s *Server) listKnowledgeFiles(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	files, err := s.Runtime.Knowledge.ListFiles(id)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(files))
+	for _, file := range files {
+		items = append(items, map[string]any{
+			"path": file.Path,
+			"sizeBytes": file.SizeBytes,
+			"updatedAt": file.UpdatedAt.Unix(),
+			"mimeType": file.MIMEType,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": items})
+}
+
+// readKnowledgeFile reads a file from a knowledge vault.
+func (s *Server) readKnowledgeFile(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	path := r.PathValue("path")
+	content, ok, err := s.Runtime.Knowledge.ReadFile(id, path)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "knowledge file not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"content": content, "vaultId": id, "path": path, "sizeBytes": len([]byte(content)), "mimeType": "text/plain"})
+}
+
+// writeKnowledgeFile creates or updates a file in a knowledge vault.
+func (s *Server) writeKnowledgeFile(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r, 4*1024*1024)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	content, ok := body["content"].(string)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "content must be a string")
+		return
+	}
+	id := r.PathValue("id")
+	path := r.PathValue("path")
+	vault, err := s.Runtime.Knowledge.WriteFile(id, path, content)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"vault": map[string]any{
+		"id":        vault.ID,
+		"name":      vault.Name,
+	}})
 }
 
 func conversationID(id string) (durable.ConversationId, error) {

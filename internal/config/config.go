@@ -4,7 +4,6 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
 )
 
 // Config is the complete runtime configuration. Secrets are never logged.
@@ -15,8 +14,6 @@ type Config struct {
 	NotifyURL     string
 	NotifyKind    string
 	NotifyMode    string
-	ObsidianRoot  string
-	ObsidianAllow []string
 	CrashDemo     bool
 	Production    bool
 	Dev           bool
@@ -43,14 +40,6 @@ func envInt(name string, fallback int) int {
 
 // Load reads configuration from the process environment.
 func Load() Config {
-	allow := []string{"AI Learning", "X Ideas", "VPS Tutorials"}
-	if extra := env("OBSIDIAN_ALLOW", ""); extra != "" {
-		for _, part := range strings.Split(extra, ",") {
-			if part = strings.TrimSpace(part); part != "" {
-				allow = append(allow, part)
-			}
-		}
-	}
 	return Config{
 		Port:          envInt("PORT", 3000),
 		DataDir:       env("DATA_DIR", "./data"),
@@ -58,8 +47,6 @@ func Load() Config {
 		NotifyURL:     os.Getenv("NOTIFY_WEBHOOK_URL"),
 		NotifyKind:    env("NOTIFY_WEBHOOK_KIND", "generic"),
 		NotifyMode:    env("NOTIFY_MODE", "errors"),
-		ObsidianRoot:  os.Getenv("OBSIDIAN_ROOT"),
-		ObsidianAllow: allow,
 		CrashDemo:     os.Getenv("ENABLE_CRASH_DEMO") == "1",
 		Production:    os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
 		Dev:           os.Getenv("DEV") == "1" || os.Getenv("GO_ENV") == "development" || os.Getenv("NODE_ENV") == "development",

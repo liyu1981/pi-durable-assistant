@@ -4,6 +4,13 @@ import type {
   ArtifactConfirmations,
   ArtifactFiles,
   ArtifactList,
+  KnowledgeFileContent,
+  KnowledgeFileInfo,
+  KnowledgeFileList,
+  KnowledgeVault,
+  KnowledgeVaultCreated,
+  KnowledgeVaultDelete,
+  KnowledgeVaultList,
   LLMModelsInput,
   LLMProfile,
   LLMProfileInput,
@@ -266,6 +273,55 @@ export function artifactRawUrl(id: string, filePath: string): string {
 
 function encodeFilePath(filePath: string): string {
   return filePath.split("/").map(encodeURIComponent).join("/");
+}
+
+/** Knowledge subsystem: vault management. */
+
+/** List all knowledge vaults. */
+export function listKnowledgeVaults(): Promise<KnowledgeVaultList> {
+  return get<KnowledgeVaultList>("/api/knowledge/vaults");
+}
+
+/** Create a new knowledge vault with a name and optional description. */
+export function createKnowledgeVault(
+  name: string,
+  description?: string,
+): Promise<KnowledgeVaultCreated> {
+  return post<KnowledgeVaultCreated>("/api/knowledge/vaults", { name, description });
+}
+
+/** Delete a knowledge vault by ID. */
+export function deleteKnowledgeVault(id: string): Promise<KnowledgeVaultDelete> {
+  return request<KnowledgeVaultDelete>(`/api/knowledge/vaults/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+/** List files in a knowledge vault. */
+export function listKnowledgeFiles(vaultId: string): Promise<KnowledgeFileList> {
+  return get<KnowledgeFileList>(`/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files`);
+}
+
+/** Read a knowledge file by vault ID and file path. */
+export function readKnowledgeFile(
+  vaultId: string,
+  filePath: string,
+): Promise<KnowledgeFileContent> {
+  return get<KnowledgeFileContent>(
+    `/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files/${encodeFilePath(filePath)}`,
+  );
+}
+
+/** Write/create a knowledge file in a vault. */
+export function writeKnowledgeFile(
+  vaultId: string,
+  filePath: string,
+  content: string,
+): Promise<KnowledgeVault> {
+  return put<KnowledgeVault>(
+    `/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files/${encodeFilePath(filePath)}`,
+    { content },
+  );
 }
 
 /** Rename a conversation; user-set titles are not overwritten automatically. */

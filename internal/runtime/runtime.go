@@ -35,6 +35,8 @@ type Runtime struct {
 	Registry harness.RegistryReader
 	// Artifacts is the durable file subsystem the agent works through.
 	Artifacts *artifacts.Store
+	// Knowledge is the knowledge vault subsystem.
+	Knowledge *knowledge.Store
 	// Confirmations holds pending human-in-the-loop requests from agent tools.
 	Confirmations *artifacts.ConfirmationStore
 
@@ -174,12 +176,16 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 	if _, err := artifactsStore.SweepIfNeeded(ctx); err != nil {
 		return nil, err
 	}
+	knowledgeStore := knowledge.NewStore(filepath.Join(cfg.DataDir, "knowledge"))
+	if _, err := knowledgeStore.ListVaults(); err != nil {
+		return nil, err
+	}
 	confirmationStore := artifacts.NewConfirmationStore(filepath.Join(cfg.DataDir, "artifact-confirmations.json"))
 	if err := registry.Install(artifacts.Extension(artifactsStore, confirmationStore)); err != nil {
 		return nil, err
 	}
 	for _, extension := range []*durable.Extension{
-		tools.Assistant, tools.Delegate, personal.Extension, knowledge.Extension,
+		tools.Assistant, tools.Delegate, personal.Extension, knowledge.Extension(knowledgeStore),
 	} {
 		if err := registry.Install(extension); err != nil {
 			return nil, err
@@ -244,6 +250,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		Settings:      store,
 		Registry:      registry,
 		Artifacts:     artifactsStore,
+		Knowledge:     knowledgeStore,
 		Confirmations: confirmationStore,
 		llm:           stored,
 		modelRef:      model,

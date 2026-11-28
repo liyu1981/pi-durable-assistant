@@ -264,6 +264,54 @@ export interface KnowledgePage {
   truncated: boolean;
 }
 
+/** Knowledge vault metadata. */
+export interface KnowledgeVault {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  pinned: boolean;
+  description: string;
+}
+
+/** Summary of a file inside a knowledge vault. */
+export interface KnowledgeFileInfo {
+  vaultId: string;
+  path: string;
+  sizeBytes: number;
+  updatedAt: number;
+  mimeType: string;
+}
+
+/** Response for listing knowledge vaults. */
+export interface KnowledgeVaultList {
+  vaults: KnowledgeVault[];
+}
+
+/** Response for listing files in a knowledge vault. */
+export interface KnowledgeFileList {
+  files: KnowledgeFileInfo[];
+}
+
+/** Response for reading a knowledge file. */
+export interface KnowledgeFileContent {
+  content: string;
+  vaultId: string;
+  path: string;
+  sizeBytes: number;
+  mimeType: string;
+}
+
+/** Response for creating a knowledge vault. */
+export interface KnowledgeVaultCreated {
+  vault: KnowledgeVault;
+}
+
+/** Response for deleting a knowledge vault. */
+export interface KnowledgeVaultDelete {
+  ok: boolean;
+}
+
 export interface OutgoingAttachment {
   name: string;
   mimeType: string;

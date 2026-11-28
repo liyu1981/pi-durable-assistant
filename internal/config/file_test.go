@@ -14,7 +14,6 @@ PORT=8080
 export DATA_DIR="/tmp/pida data"
 LLM_MODEL='gpt test'
 NOTIFY_MODE=errors # not a comment
-OBSIDIAN_ALLOW=AI Learning, X Ideas
 `
 	values, order := Parse(text)
 	if values["PORT"] != "8080" {
@@ -29,10 +28,7 @@ OBSIDIAN_ALLOW=AI Learning, X Ideas
 	if values["NOTIFY_MODE"] != "errors # not a comment" {
 		t.Fatalf("NOTIFY_MODE = %q", values["NOTIFY_MODE"])
 	}
-	if values["OBSIDIAN_ALLOW"] != "AI Learning, X Ideas" {
-		t.Fatalf("OBSIDIAN_ALLOW = %q", values["OBSIDIAN_ALLOW"])
-	}
-	if len(order) != 5 {
+	if len(order) != 4 {
 		t.Fatalf("order = %v", order)
 	}
 }

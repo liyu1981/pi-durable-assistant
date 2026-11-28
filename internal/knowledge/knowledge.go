@@ -1,236 +1,358 @@
-// Package knowledge implements read-only, allowlisted search over an Obsidian vault.
+// Package knowledge implements a knowledge vault subsystem similar to artifacts:
+// user can create vaults, upload files, list vaults and files, and read files.
+// Each vault has an ID, description, and stores files addressably.
 package knowledge
 
 import (
 	"context"
-	"errors"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"mime"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode/utf8"
+	"sync"
+	"time"
 
 	"github.com/MichaelKinsy/PiG/ai"
 	"github.com/MichaelKinsy/PiG/durable"
 	"github.com/MichaelKinsy/PiG/durable/harness"
 )
 
-const (
-	maxResults = 12
-	maxRead    = 12_000
-)
-
-// AllowedRoots returns the configured vault root and allowlisted relative folders.
-func AllowedRoots(root string, allow []string) []string {
-	if root == "" {
-		return nil
-	}
-	cleanRoot, err := filepath.Abs(root)
-	if err != nil {
-		return nil
-	}
-	if len(allow) == 0 {
-		return []string{cleanRoot}
-	}
-	roots := make([]string, 0, len(allow))
-	for _, rel := range allow {
-		roots = append(roots, filepath.Join(cleanRoot, filepath.Clean(rel)))
-	}
-	return roots
+// KnowledgeVault is one addressable knowledge vault container.
+type KnowledgeVault struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Pinned    bool      `json:"pinned"`
+	Description string   `json:"description"`
 }
 
-func resolve(roots []string, rel string) (string, error) {
-	if len(roots) == 0 {
-		return "", errors.New("knowledge base is disabled; set OBSIDIAN_ROOT")
+// KnowledgeFile is a single file stored inside a knowledge vault.
+type KnowledgeFile struct {
+	VaultID   string    `json:"vaultId"`
+	Path      string    `json:"path"`
+	SizeBytes int64     `json:"sizeBytes"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	MIMEType  string    `json:"mimeType"`
+}
+
+// Store persists knowledge vaults and their files under a root directory.
+type Store struct {
+	root string
+	mu   sync.Mutex
+}
+
+// NewStore returns a store rooted at root.
+func NewStore(root string) *Store {
+	return &Store{root: root}
+}
+
+func newVaultID() string {
+	var b [16]byte
+	return "kv_" + hex.EncodeToString(b[:])
+}
+
+func validVaultID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
 	}
-	clean := filepath.Clean(strings.ReplaceAll(rel, "\\", "/"))
-	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-		return "", errors.New("invalid path")
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
 	}
-	for _, root := range roots {
-		absRoot, err := filepath.Abs(root)
+	return true
+}
+
+func (s *Store) vaultDir(id string) (string, error) {
+	if !validVaultID(id) {
+		return "", fmt.Errorf("invalid vault id %q", id)
+	}
+	return filepath.Join(s.root, id), nil
+}
+
+func (s *Store) metaPath(id string) string { return filepath.Join(s.root, id+".json") }
+
+func newVault(name, description string) *KnowledgeVault {
+	now := time.Now().UTC()
+	return &KnowledgeVault{
+		ID:        newVaultID(),
+		Name:      name,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Description: description,
+	}
+}
+
+func (s *Store) writeVaultMeta(id string, vault *KnowledgeVault) error {
+	if _, err := s.vaultDir(id); err != nil {
+		return err
+	}
+	data, err := json.Marshal(vault)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.root, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(s.metaPath(id), data, 0o600)
+}
+
+// loadVault returns nil when the vault does not exist.
+func (s *Store) loadVault(id string) (*KnowledgeVault, error) {
+	if _, err := s.vaultDir(id); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(s.metaPath(id))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var vault KnowledgeVault
+	if err := json.Unmarshal(data, &vault); err != nil {
+		return nil, err
+	}
+	return &vault, nil
+}
+
+// CreateVault creates a new knowledge vault with a given name and description.
+func (s *Store) CreateVault(name, description string) (*KnowledgeVault, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vault := newVault(name, description)
+	if err := s.writeVaultMeta(vault.ID, vault); err != nil {
+		return nil, err
+	}
+	return vault, nil
+}
+
+// ListVaults returns all vaults ordered by creation time.
+func (s *Store) ListVaults() ([]*KnowledgeVault, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listVaultsLocked()
+}
+
+func (s *Store) listVaultsLocked() ([]*KnowledgeVault, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var vaults []*KnowledgeVault
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".json") || entry.IsDir() {
+			continue
+		}
+		vault, err := s.loadVault(strings.TrimSuffix(name, ".json"))
 		if err != nil {
+			return nil, err
+		}
+		if vault == nil {
 			continue
 		}
-		candidate := filepath.Join(absRoot, clean)
-		relCheck, err := filepath.Rel(absRoot, candidate)
-		if err != nil || relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
-			continue
-		}
-		info, err := os.Stat(candidate)
-		if err != nil || !info.Mode().IsRegular() {
-			continue
-		}
-		return candidate, nil
+		vaults = append(vaults, vault)
 	}
-	return "", errors.New("path is not allowlisted")
+	sort.Slice(vaults, func(i, j int) bool { return vaults[i].CreatedAt.Before(vaults[j].CreatedAt) })
+	return vaults, nil
 }
 
-// Match is one search hit.
-type Match struct {
-	Path string `json:"path"`
-	Line int    `json:"line"`
-	Text string `json:"text"`
+// DeleteVault removes a vault and all of its files.
+func (s *Store) DeleteVault(vaultID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	contentDir, err := s.vaultDir(vaultID)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(contentDir); err != nil {
+		return err
+	}
+	return os.Remove(s.metaPath(vaultID))
 }
 
-// Search walks the allowlisted roots and returns case-insensitive text hits.
-func Search(roots []string, query string, includeHistorical bool) ([]Match, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return []Match{}, nil
+// WriteFile creates or updates a file inside a knowledge vault and refreshes
+// the vault's updated-at timestamp and size.
+func (s *Store) WriteFile(vaultID, name, content string) (*KnowledgeVault, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vault, err := s.loadVault(vaultID)
+	if err != nil {
+		return nil, err
 	}
-	if len([]rune(query)) > 200 {
-		return nil, errors.New("query too long")
+	if vault == nil {
+		return nil, fmt.Errorf("vault %q not found", vaultID)
 	}
-	needle := strings.ToLower(query)
-	hits := []Match{}
-	for _, root := range roots {
-		filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-			if err != nil || len(hits) >= maxResults {
-				return nil
-			}
-			if entry.IsDir() {
-				name := entry.Name()
-				if strings.HasPrefix(name, ".") || name == "node_modules" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			ext := strings.ToLower(filepath.Ext(path))
-			if ext != ".md" && ext != ".txt" && ext != ".org" {
-				return nil
-			}
-			data, err := os.ReadFile(path)
-			if err != nil || len(data) > 2_000_000 {
-				return nil
-			}
-			for i, line := range strings.Split(string(data), "\n") {
-				if !strings.Contains(strings.ToLower(line), needle) {
-					continue
-				}
-				if !includeHistorical && strings.Contains(line, "Archive") {
-					continue
-				}
-				rel, _ := filepath.Rel(root, path)
-				hits = append(hits, Match{Path: filepath.ToSlash(rel), Line: i + 1, Text: strings.TrimSpace(line)})
-				if len(hits) >= maxResults {
-					break
-				}
-			}
+	vaultDir, err := s.vaultDir(vaultID)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
+		return nil, err
+	}
+	target := filepath.Join(vaultDir, name)
+	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+		return nil, err
+	}
+	return s.finishWriteLocked(vault)
+}
+
+func (s *Store) finishWriteLocked(vault *KnowledgeVault) (*KnowledgeVault, error) {
+	vault.UpdatedAt = time.Now().UTC()
+	if err := s.writeVaultMeta(vault.ID, vault); err != nil {
+		return nil, err
+	}
+	return vault, nil
+}
+
+// ReadFile returns the content of a file inside a knowledge vault.
+func (s *Store) ReadFile(vaultID, name string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vaultDir, err := s.vaultDir(vaultID)
+	if err != nil {
+		return "", false, err
+	}
+	target := filepath.Join(vaultDir, name)
+	data, err := os.ReadFile(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return string(data), true, nil
+}
+
+// ListFiles returns the files of one vault ordered by path.
+func (s *Store) ListFiles(vaultID string) ([]*KnowledgeFile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	base, err := s.vaultDir(vaultID)
+	if err != nil {
+		return nil, err
+	}
+	files := []*KnowledgeFile{}
+	if err := filepath.WalkDir(base, func(filePath string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
 			return nil
-		})
-	}
-	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].Path == hits[j].Path {
-			return hits[i].Line < hits[j].Line
 		}
-		return hits[i].Path < hits[j].Path
-	})
-	return hits, nil
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(base, filePath)
+		if err != nil {
+			return err
+		}
+		mimeType := mime.TypeByExtension(path.Ext(rel))
+		files = append(files, &KnowledgeFile{
+			VaultID:   vaultID,
+			Path:      filepath.ToSlash(rel),
+			SizeBytes: info.Size(),
+			UpdatedAt: info.ModTime().UTC(),
+			MIMEType:  mimeType,
+		})
+		return nil
+	}); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	return files, nil
 }
 
-// Read returns a small, line-numbered slice of an allowlisted file.
-func Read(roots []string, rel string, line int) (string, error) {
-	path, err := resolve(roots, rel)
-	if err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", errors.New("file not found or unreadable")
-	}
-	if !utf8.Valid(data) {
-		return "", errors.New("file is not UTF-8 text")
-	}
-	lines := strings.Split(string(data), "\n")
-	if line < 1 {
-		line = 1
-	}
-	if line > len(lines) {
-		line = len(lines)
-	}
-	end := line + 80
-	if end > len(lines) {
-		end = len(lines)
-	}
-	out := []string{}
-	for i := line - 1; i < end; i++ {
-		out = append(out, fmt.Sprintf("%d\t%s", i+1, lines[i]))
-	}
-	result := strings.Join(out, "\n")
-	if len(result) > maxRead {
-		result = result[:maxRead]
-	}
-	return result, nil
-}
-
-// Status describes the knowledge configuration for the UI.
-func Status(root string) map[string]any {
-	if root == "" {
-		return map[string]any{"enabled": false, "reason": "OBSIDIAN_ROOT not configured"}
-	}
-	return map[string]any{"enabled": true, "rootConfigured": true}
-}
-
-// Extension exposes knowledge search/read tools to the agent.
-var Extension = harness.DefineExtension(durable.Extension{
-	Name: "knowledge",
-	Tools: []*durable.ToolRegistration{
-		harness.DefineTool(durable.ToolRegistration{
-			ToolSchema: ai.ToolSchema{
-				Name: "search_knowledge", Description: "Search the user's allowlisted notes and return paths with line numbers",
-				Parameters: map[string]any{"type": "object", "properties": map[string]any{
-					"query": map[string]any{"type": "string"}, "includeHistorical": map[string]any{"type": "boolean"},
-				}, "required": []any{"query"}},
-			},
-			Replay: durable.ReplaySafe,
-			Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
-				input, _ := args.(map[string]any)
-				query, _ := input["query"].(string)
-				historical, _ := input["includeHistorical"].(bool)
-				hits, err := Search(AllowedRoots(allowedRoot(), allowedAllow()), query, historical)
-				if err != nil {
-					return textResult(err.Error()), nil
-				}
-				if len(hits) == 0 {
-					return textResult("No matching content found."), nil
-				}
-				lines := []string{}
-				for _, hit := range hits {
-					lines = append(lines, fmt.Sprintf("%s:%d  %s", hit.Path, hit.Line, hit.Text))
-				}
-				return textResult(strings.Join(lines, "\n")), nil
-			},
-		}),
-		harness.DefineTool(durable.ToolRegistration{
-			ToolSchema: ai.ToolSchema{
-				Name: "read_knowledge", Description: "Read a line range from one allowlisted note (read-only)",
-				Parameters: map[string]any{"type": "object", "properties": map[string]any{
-					"path": map[string]any{"type": "string"}, "line": map[string]any{"type": "number"},
-				}, "required": []any{"path"}},
-			},
-			Replay: durable.ReplaySafe,
-			Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
-				input, _ := args.(map[string]any)
-				path, _ := input["path"].(string)
-				line := 1
-				if value, ok := input["line"].(float64); ok {
-					line = int(value)
-				}
-				content, err := Read(AllowedRoots(allowedRoot(), allowedAllow()), path, line)
-				if err != nil {
-					return textResult(err.Error()), nil
-				}
-				return textResult(content), nil
-			},
-		}),
-	},
-})
-
-func allowedRoot() string    { return os.Getenv("OBSIDIAN_ROOT") }
-func allowedAllow() []string { return nil }
-
+// textResult creates a tool execution result with a text output.
 func textResult(value string) durable.ToolExecutionResult {
 	return durable.ToolExecutionResult{Output: []ai.ToolResultMessageContent{ai.TextContent{Text: value}}}
+}
+
+// Extension exposes the knowledge vault subsystem to the agent as tools.
+func Extension(store *Store) *durable.Extension {
+	return harness.DefineExtension(durable.Extension{
+		Name: "knowledge",
+		Tools: []*durable.ToolRegistration{
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
+					Name: "list_knowledge_vaults", Description: "List all knowledge vaults",
+					Parameters: map[string]any{"type": "object", "properties": map[string]any{
+						"": map[string]any{},
+					}, "required": []any{""}},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					vaults, err := store.ListVaults()
+					if err != nil {
+						return textResult(err.Error()), nil
+					}
+					items := []string{}
+					for _, vault := range vaults {
+						items = append(items, fmt.Sprintf("%s: %s", vault.ID, vault.Description))
+					}
+					return textResult(strings.Join(items, "\n")), nil
+				},
+			}),
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
+					Name: "list_knowledge_files", Description: "List files in a knowledge vault",
+					Parameters: map[string]any{"type": "object", "properties": map[string]any{
+						"vaultId": map[string]any{"type": "string"},
+					}, "required": []any{"vaultId"}},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					input, _ := args.(map[string]any)
+					vaultId, _ := input["vaultId"].(string)
+					files, err := store.ListFiles(vaultId)
+					if err != nil {
+						return textResult(err.Error()), nil
+					}
+					items := []string{}
+					for _, file := range files {
+						items = append(items, fmt.Sprintf("%s (%d bytes)", file.Path, file.SizeBytes))
+					}
+					return textResult(strings.Join(items, "\n")), nil
+				},
+			}),
+			harness.DefineTool(durable.ToolRegistration{
+				ToolSchema: ai.ToolSchema{
+					Name: "read_knowledge_file", Description: "Read a file from a knowledge vault",
+					Parameters: map[string]any{"type": "object", "properties": map[string]any{
+						"vaultId": map[string]any{"type": "string"}, "filePath": map[string]any{"type": "string"},
+					}, "required": []any{"vaultId", "filePath"}},
+				},
+				Replay: durable.ReplaySafe,
+				Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+					input, _ := args.(map[string]any)
+					vaultId, _ := input["vaultId"].(string)
+					filePath, _ := input["filePath"].(string)
+					content, ok, err := store.ReadFile(vaultId, filePath)
+					if err != nil {
+						return textResult(err.Error()), nil
+					}
+					if !ok {
+						return textResult("File not found"), nil
+					}
+					return textResult(content), nil
+				},
+			}),
+		},
+	})
 }

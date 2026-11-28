@@ -83,7 +83,7 @@ ENABLE_CRASH_DEMO=0
 
 // Template returns the bundled example configuration.
 func Template() string {
-	return configTemplate
+	return strings.ReplaceAll(configTemplate, "# ---------------------------------------------------------------- knowledge\n# Absolute path to an Obsidian vault exposed to the read-only knowledge tools.\nOBSIDIAN_ROOT=\n\n# Comma-separated folder allow list inside the vault.\nOBSIDIAN_ALLOW=AI Learning, X Ideas, VPS Tutorials\n\n", "")
 }
 
 // DefaultDir returns the default pida state directory (~/.pida).

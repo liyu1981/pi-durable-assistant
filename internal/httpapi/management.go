@@ -10,7 +10,6 @@ import (
 	"github.com/MichaelKinsy/PiG/durable"
 	"github.com/google/uuid"
 	"github.com/liyu1981/pi-durable-assistant/internal/docs"
-	"github.com/liyu1981/pi-durable-assistant/internal/knowledge"
 	"github.com/liyu1981/pi-durable-assistant/internal/personal"
 	"github.com/liyu1981/pi-durable-assistant/internal/schedule"
 	"github.com/liyu1981/pi-durable-assistant/internal/tasks"
@@ -399,7 +398,7 @@ func (s *Server) getPersonal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"memory": personal.PublicDoc(memory), "skills": personal.PublicDoc(skills),
-		"knowledge": knowledge.Status(s.Config.ObsidianRoot),
+		"knowledge": map[string]any{"enabled": false, "reason": "Obsidian knowledge disabled; use knowledge vaults"},
 	})
 }
 
@@ -485,34 +484,11 @@ func (s *Server) decidePersonal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) searchKnowledge(w http.ResponseWriter, r *http.Request) {
-	roots := knowledge.AllowedRoots(s.Config.ObsidianRoot, s.Config.ObsidianAllow)
-	hits, err := knowledge.Search(roots, r.URL.Query().Get("q"), r.URL.Query().Get("history") == "1")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	items := []map[string]any{}
-	for _, hit := range hits {
-		items = append(items, map[string]any{
-			"path": hit.Path, "status": "current", "revision": "", "line": hit.Line,
-			"endLine": hit.Line, "excerpt": hit.Text, "score": 1,
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"query": r.URL.Query().Get("q"), "includeHistorical": r.URL.Query().Get("history") == "1", "hits": items})
+	writeError(w, http.StatusBadRequest, "knowledge vault search is available via /api/knowledge/vaults endpoint; Obsidian search is disabled")
 }
 
 func (s *Server) readKnowledge(w http.ResponseWriter, r *http.Request) {
-	roots := knowledge.AllowedRoots(s.Config.ObsidianRoot, s.Config.ObsidianAllow)
-	line, _ := strconv.Atoi(r.URL.Query().Get("line"))
-	content, err := knowledge.Read(roots, r.URL.Query().Get("path"), line)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"path": r.URL.Query().Get("path"), "status": "current", "revision": "",
-		"startLine": line, "endLine": line, "text": content, "truncated": len(content) >= 12_000,
-	})
+	writeError(w, http.StatusBadRequest, "knowledge file read is available via /api/knowledge/vaults/{id}/files/{path} endpoint; Obsidian read is disabled")
 }
 
 func decodeDoc[T any](draft *delta.Object) (T, error) {

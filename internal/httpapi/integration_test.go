@@ -202,7 +202,7 @@ func TestToolsRoute(t *testing.T) {
 		}
 		names[name] = true
 	}
-	for _, want := range []string{"todo", "delegate", "propose_memory", "search_knowledge", "artifact_create", "artifact_move"} {
+	for _, want := range []string{"todo", "delegate", "propose_memory", "list_knowledge_vaults", "list_knowledge_files", "read_knowledge_file", "artifact_create", "artifact_move"} {
 		if !names[want] {
 			t.Fatalf("missing tool %q in %v", want, names)
 		}
