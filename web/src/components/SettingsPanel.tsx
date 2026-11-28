@@ -70,6 +70,20 @@ function toForm(profile: {
   };
 }
 
+/** The request path the runtime appends to the base URL for each API. */
+function requestPath(api: string): string {
+  if (api === "anthropic-messages") return "/v1/messages";
+  if (api === "openai-responses") return "/responses";
+  return "/chat/completions";
+}
+
+/** Shows the exact URL chat requests will use, so a missing /v1 is obvious. */
+function endpointPreview(api: string, baseURL: string): string {
+  const base = baseURL.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(base)) return "";
+  return base + requestPath(api);
+}
+
 function validateBaseURL(form: FormState): string | null {
   if (!form.baseURL.trim()) return "Base URL is required.";
   if (!/^https?:\/\//.test(form.baseURL.trim())) {
@@ -368,6 +382,11 @@ export function SettingsPanel() {
                 spellCheck={false}
               />
             </Field>
+            {endpointPreview(form.api, form.baseURL) ? (
+              <p className="-mt-1 break-all font-mono text-xs text-muted-foreground">
+                Chat requests go to {endpointPreview(form.api, form.baseURL)}
+              </p>
+            ) : null}
             <Field label="API key (optional)">
               <Input
                 type="password"

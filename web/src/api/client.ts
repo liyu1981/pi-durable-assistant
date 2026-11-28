@@ -5,7 +5,6 @@ import type {
   ArtifactFiles,
   ArtifactList,
   KnowledgeFileContent,
-  KnowledgeFileInfo,
   KnowledgeFileList,
   KnowledgeVault,
   KnowledgeVaultCreated,

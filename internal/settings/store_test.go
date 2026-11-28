@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -171,5 +172,55 @@ func TestProbeUsesProviderModels(t *testing.T) {
 	}
 	if result.LatencyMS < 0 {
 		t.Fatal("negative latency")
+	}
+}
+
+// Anthropic's base URL has no /v1 segment because the SDK appends /v1 itself,
+// so the models probe must add it instead of probing the bare host.
+func TestProbeAnthropicAppendsVersionPath(t *testing.T) {
+	var gotPath, gotKey, gotVersion string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotKey, gotVersion = r.URL.Path, r.Header.Get("x-api-key"), r.Header.Get("anthropic-version")
+		fmt.Fprint(w, `{"data":[{"id":"claude-test"}]}`)
+	}))
+	t.Cleanup(server.Close)
+	cfg := testDefaults()
+	cfg.API, cfg.BaseURL, cfg.APIKey = "anthropic-messages", server.URL, "anthropic-key"
+	result, err := Probe(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/models" {
+		t.Fatalf("probe path = %q, want /v1/models", gotPath)
+	}
+	if gotKey != "anthropic-key" || gotVersion == "" {
+		t.Fatalf("missing anthropic headers: key=%q version=%q", gotKey, gotVersion)
+	}
+	if len(result.Models) != 1 || result.Models[0] != "claude-test" {
+		t.Fatalf("unexpected models: %+v", result.Models)
+	}
+}
+
+// A 404 from the models endpoint means the base URL is the wrong prefix; the
+// error must name the probed URL so the user can correct it.
+func TestProbeExplainsNotFound(t *testing.T) {
+	cfg := testDefaults()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		// Echo the credential to prove the error path redacts it.
+		fmt.Fprintf(w, `{"message":"not found","key":%q}`, r.Header.Get("Authorization"))
+	}))
+	t.Cleanup(server.Close)
+	cfg.BaseURL = server.URL
+	_, err := Probe(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected a 404 error")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "404") || !strings.Contains(message, "/models") || !strings.Contains(message, "/v1") {
+		t.Fatalf("unhelpful probe error: %q", message)
+	}
+	if strings.Contains(message, cfg.APIKey) {
+		t.Fatalf("provider key leaked into the error: %q", message)
 	}
 }

@@ -24,6 +24,25 @@ func TestFriendlyModelError(t *testing.T) {
 	}
 }
 
+func TestFriendlyModelErrorExplainsMissingChatEndpoint(t *testing.T) {
+	for _, raw := range []string{
+		`404 404 page not found`,
+		`404: {"message":"not found"}`,
+		`openai: 404 status`, // wrapped form: status appears in the message head
+		`405 Method Not Allowed`,
+	} {
+		got := friendlyModelError(raw)
+		if !strings.Contains(got, "/v1") {
+			t.Fatalf("%q translated to %q", raw, got)
+		}
+	}
+	// A 404 that is not the status of the request must not be rewritten.
+	tail := strings.Repeat("x", 80) + " 404"
+	if got := friendlyModelError(tail); got != tail {
+		t.Fatalf("unrelated 404 changed: %q", got)
+	}
+}
+
 func TestAuthAndSameOrigin(t *testing.T) {
 	server := &Server{Config: config.Config{Password: "secret"}}
 	request := httptest.NewRequest("GET", "/api/info", nil)

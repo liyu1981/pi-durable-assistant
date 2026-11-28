@@ -28,9 +28,27 @@ func friendlyModelError(message string) string {
 		return "No model provider is configured. Open Settings > Models, set the base URL and model, then save."
 	case strings.Contains(message, "No API key for provider"):
 		return "The provider needs an API key. Open Settings > Models and enter one, or use a local server that accepts an empty key."
+	case missingChatEndpoint(message):
+		return "The provider answered 404 for the chat endpoint, so the base URL does not reach its API. " +
+			"Open Settings > Models and check it: OpenAI-compatible servers usually need the base URL to end in /v1 " +
+			"(for example http://host:11434/v1), and an Anthropic base URL is the bare host. " +
+			"Test connection reports the exact endpoint that was probed."
 	default:
 		return message
 	}
+}
+
+// missingChatEndpoint reports whether a provider error is an HTTP 404/405 from
+// the chat endpoint, which means the configured base URL is the wrong prefix.
+// The status appears near the start of PiG's message, so only the head is
+// inspected to avoid matching unrelated numbers further down the body.
+func missingChatEndpoint(message string) bool {
+	const head = 80
+	lower := strings.ToLower(message)
+	if len(lower) > head {
+		lower = lower[:head]
+	}
+	return strings.Contains(lower, "404") || strings.Contains(lower, "405")
 }
 
 type ToolCallView struct {

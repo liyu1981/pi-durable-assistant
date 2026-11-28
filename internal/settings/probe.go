@@ -39,11 +39,30 @@ func Probe(ctx context.Context, cfg Config) (ProbeResult, error) {
 	return fetchModels(ctx, cfg)
 }
 
+// modelsPath is the models endpoint appended to the configured base URL. The
+// Anthropic SDK appends /v1 itself, so that base URL carries no version
+// segment, while OpenAI-style base URLs are expected to include /v1 already.
+func modelsPath(api string) string {
+	if api == "anthropic-messages" {
+		return "/v1/models"
+	}
+	return "/models"
+}
+
+// baseURLHint explains a 404 from the models endpoint, which almost always
+// means the base URL points at the host root instead of the API root.
+func baseURLHint(api string) string {
+	if api == "anthropic-messages" {
+		return "Check the base URL in Settings > Models: it is the API host, for example https://api.anthropic.com"
+	}
+	return "Check the base URL in Settings > Models: OpenAI-compatible servers usually need the API root, which ends in /v1 (for example http://host:11434/v1)"
+}
+
 func fetchModels(ctx context.Context, cfg Config) (ProbeResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 
-	url := strings.TrimRight(cfg.BaseURL, "/") + "/models"
+	url := strings.TrimRight(cfg.BaseURL, "/") + modelsPath(cfg.API)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return ProbeResult{}, fmt.Errorf("invalid models URL: %w", err)
@@ -77,6 +96,10 @@ func fetchModels(ctx context.Context, cfg Config) (ProbeResult, error) {
 		}
 		if cfg.APIKey != "" {
 			detail = strings.ReplaceAll(detail, cfg.APIKey, "***")
+		}
+		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+			return result, fmt.Errorf("provider returned HTTP %d from %s: %s. %s",
+				response.StatusCode, url, detail, baseURLHint(cfg.API))
 		}
 		return result, fmt.Errorf("provider returned HTTP %d: %s", response.StatusCode, detail)
 	}
