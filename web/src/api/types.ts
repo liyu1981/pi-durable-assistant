@@ -139,6 +139,7 @@ export interface ViewPayload {
 export interface Conversation {
   id: number;
   title: string;
+  titleSource?: "auto" | "user" | "fork";
   createdAt: string | number;
   archivedAt?: string | null;
   forkOf?: number | null;

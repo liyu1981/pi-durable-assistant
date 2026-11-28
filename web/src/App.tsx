@@ -51,6 +51,7 @@ import {
 import { ArtifactFocusDialog, MermaidLightbox } from "./components/ArtifactViewer";
 import { ChatThread } from "./components/ChatThread";
 import { Composer } from "./components/Composer";
+import { ConversationRename } from "./components/ConversationRename";
 import { Drawer, MANAGEMENT_TABS, ManagementTabs } from "./components/Drawer";
 import { Sidebar } from "./components/Sidebar";
 import { SystemSettingsDialog } from "./components/SystemSettingsDialog";
@@ -378,9 +379,27 @@ export function App() {
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Conversation
               </p>
-              <h2 className="truncate font-heading text-xl font-bold tracking-tight" title={title}>
-                {title}
-              </h2>
+              <div className="flex min-w-0 items-center gap-1">
+                <h2
+                  className="truncate font-heading text-xl font-bold tracking-tight"
+                  title={title}
+                >
+                  {title}
+                </h2>
+                {currentId !== null ? (
+                  <ConversationRename
+                    id={currentId}
+                    title={current?.title ?? ""}
+                    onRenamed={(next) =>
+                      setConversations((items) =>
+                        items.map((item) =>
+                          item.id === currentId ? { ...item, title: next } : item,
+                        ),
+                      )
+                    }
+                  />
+                ) : null}
+              </div>
             </div>
             {currentId !== null ? (
               <Tooltip>

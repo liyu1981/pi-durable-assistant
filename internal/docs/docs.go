@@ -29,6 +29,7 @@ type IndexItem struct {
 	ID          int64   `json:"id"`
 	CreatedAt   string  `json:"createdAt"`
 	Title       string  `json:"title"`
+	TitleSource string  `json:"titleSource,omitempty"`
 	ForkOf      *int64  `json:"forkOf,omitempty"`
 	ForkAtEntry *int64  `json:"forkAtEntry,omitempty"`
 	ArchivedAt  *string `json:"archivedAt,omitempty"`

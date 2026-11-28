@@ -62,6 +62,7 @@ func NewServer(rt *runtime.Runtime, assets fs.FS) (*Server, error) {
 	mux.HandleFunc("POST /api/conversations/{id}/remove", server.shelf("remove"))
 	mux.HandleFunc("GET /api/conversations/{id}/events", server.events)
 	mux.HandleFunc("POST /api/conversations/{id}/messages", server.postMessage)
+	mux.HandleFunc("PUT /api/conversations/{id}/title", server.renameConversation)
 	mux.HandleFunc("POST /api/conversations/{id}/fork", server.fork)
 	mux.HandleFunc("POST /api/conversations/{id}/abort", server.abort)
 	mux.HandleFunc("GET /api/conversations/{id}/images/{entry}/{index}", server.image)

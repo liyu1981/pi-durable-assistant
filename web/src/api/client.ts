@@ -267,3 +267,8 @@ export function artifactRawUrl(id: string, filePath: string): string {
 function encodeFilePath(filePath: string): string {
   return filePath.split("/").map(encodeURIComponent).join("/");
 }
+
+/** Rename a conversation; user-set titles are not overwritten automatically. */
+export function renameConversation(id: number, title: string): Promise<{ title: string }> {
+  return put<{ title: string }>(`/api/conversations/${id}/title`, { title });
+}

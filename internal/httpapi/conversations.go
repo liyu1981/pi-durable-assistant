@@ -347,7 +347,11 @@ func registerConversation(title string, extra docs.IndexItem) func(tx durable.Tx
 		if err != nil {
 			return err
 		}
-		item := docs.IndexItem{ID: int64(id), CreatedAt: time.Now().UTC().Format(time.RFC3339), Title: title}
+		source := extra.TitleSource
+		if source == "" {
+			source = "auto"
+		}
+		item := docs.IndexItem{ID: int64(id), CreatedAt: time.Now().UTC().Format(time.RFC3339), Title: title, TitleSource: source}
 		item.ForkOf, item.ForkAtEntry, item.ArchivedAt = extra.ForkOf, extra.ForkAtEntry, extra.ArchivedAt
 		index.Items = append(index.Items, item)
 		return writeIndex(draft, index)
@@ -431,11 +435,58 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 		for _, item := range index.Items {
 			if item.ID == int64(conversation.Id()) && item.Title == "New conversation" {
 				item.Title = string(runes)
+				item.TitleSource = "auto"
 			}
 		}
 		return nil, writeIndex(draft, index)
 	})
 	writeJSON(w, http.StatusAccepted, map[string]any{"submissionId": submission.Id()})
+}
+
+// renameConversation sets a user-owned conversation title.
+func (s *Server) renameConversation(w http.ResponseWriter, r *http.Request) {
+	conversation, err := s.getConversation(r, r.PathValue("id"))
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	body, err := readBody(r, 4_000)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	title, _ := body["title"].(string)
+	title = strings.TrimSpace(strings.ReplaceAll(title, "\n", " "))
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	if runes := []rune(title); len(runes) > 50 {
+		title = string(runes[:50])
+	}
+	_, err = s.Runtime.Root.Commit(r.Context(), func(tx durable.Tx) (any, error) {
+		draft, err := durable.TxDoc(tx, docs.Index)
+		if err != nil {
+			return nil, err
+		}
+		index, err := durable.DecodeDoc[docs.IndexDoc](draft.Snapshot())
+		if err != nil {
+			return nil, err
+		}
+		for i := range index.Items {
+			if index.Items[i].ID == int64(conversation.Id()) {
+				index.Items[i].Title = title
+				index.Items[i].TitleSource = "user"
+				break
+			}
+		}
+		return nil, writeIndex(draft, index)
+	})
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"title": title})
 }
 
 func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
@@ -469,7 +520,9 @@ func (s *Server) fork(w http.ResponseWriter, r *http.Request) {
 	fork, err := conversation.Fork(r.Context(), entryID, harness.ConversationCreateOptions{
 		Ownership: durable.ConversationOwnership{Kind: durable.ConversationOwnerless},
 		Agent:     &harness.AgentChange{Model: harness.SetTo(s.Runtime.Model())},
-		Init:      registerConversation("Fork of "+parentTitle, docs.IndexItem{ForkOf: &parentID, ForkAtEntry: &forkAt}),
+		Init: registerConversation("Fork of "+parentTitle, docs.IndexItem{
+			ForkOf: &parentID, ForkAtEntry: &forkAt, TitleSource: "fork",
+		}),
 	})
 	if err != nil {
 		handleError(w, err)

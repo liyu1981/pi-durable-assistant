@@ -442,3 +442,20 @@ func TestSystemPromptRoute(t *testing.T) {
 		t.Fatalf("system prompt text missing: %v", body)
 	}
 }
+
+func TestRenameConversationRoute(t *testing.T) {
+	client := newTestServer(t)
+	id := client.createConversation()
+
+	status, body := client.do("PUT", fmt.Sprintf("/api/conversations/%d/title", id), map[string]any{
+		"title": "  My renamed chat  ",
+	})
+	if status != http.StatusOK || body["title"] != "My renamed chat" {
+		t.Fatalf("rename: %d %v", status, body)
+	}
+
+	status, _ = client.do("PUT", fmt.Sprintf("/api/conversations/%d/title", id), map[string]any{"title": ""})
+	if status != http.StatusBadRequest {
+		t.Fatalf("empty title should be rejected: %d", status)
+	}
+}

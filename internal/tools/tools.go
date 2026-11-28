@@ -14,6 +14,7 @@ import (
 	"github.com/MichaelKinsy/PiG/chord/delta"
 	"github.com/MichaelKinsy/PiG/durable"
 	"github.com/MichaelKinsy/PiG/durable/harness"
+	"github.com/liyu1981/pi-durable-assistant/internal/attachments"
 	"github.com/liyu1981/pi-durable-assistant/internal/docs"
 	"github.com/liyu1981/pi-durable-assistant/internal/netutil"
 	"github.com/liyu1981/pi-durable-assistant/internal/tasks"
@@ -397,13 +398,112 @@ func init() {
 	})
 }
 
+// RetitleConversation asks the active model for a new conversation title.
+var RetitleConversation = harness.DefineTool(durable.ToolRegistration{
+	ToolSchema: ai.ToolSchema{
+		Name:        "retitle_conversation",
+		Description: "Generate a new title for this conversation, optionally guided by a hint from the user",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"hint": map[string]any{"type": "string"},
+			},
+		},
+	},
+	Replay: durable.ReplaySafe,
+	Execute: func(ctx context.Context, args any, api durable.ToolExecutionApi) (durable.ToolExecutionResult, error) {
+		input, _ := args.(map[string]any)
+		hint, _ := input["hint"].(string)
+		taskInput, err := durable.ToJsonValue(tasks.TitleInput{Hint: hint})
+		if err != nil {
+			return textResult(fmt.Sprintf("failed to start retitle: %v", err)), nil
+		}
+		id, err := api.CreateTaskErased(ctx, tasks.TitleTask.Erased(), taskInput, durable.TaskOptions{
+			Ownership:        durable.TaskOwnership{Kind: durable.TaskOwnedByTask, TaskId: api.TaskId()},
+			AbandonOnRestart: boolPtr(false),
+		})
+		if err != nil {
+			return textResult(fmt.Sprintf("failed to start retitle: %v", err)), nil
+		}
+		if _, err := api.WaitForTask(ctx, id); err != nil {
+			return textResult(fmt.Sprintf("retitle task failed: %v", err)), nil
+		}
+		index, err := durable.Snapshot[docs.IndexDoc](ctx, api, docs.Index)
+		if err != nil || index == nil {
+			return textResult("retitle finished but the title could not be read"), nil
+		}
+		for _, item := range index.Items {
+			if item.ID == int64(api.ConversationId()) {
+				return textResult("Conversation retitled to: " + item.Title), nil
+			}
+		}
+		return textResult("retitle finished but the title could not be read"), nil
+	},
+})
+
+// autoTitleHook asks for a title task after the first successful answer.
+func autoTitleHook(ctx context.Context, run harness.RunSummary, api harness.HookApi) (*harness.RunEndTasks, error) {
+	state, err := api.MemoCandidate(ctx, "auto-title-state", "requested")
+	if err != nil {
+		return nil, err
+	}
+	if value, ok := state.(string); ok && value == "requested" {
+		return nil, nil
+	}
+	index, err := durable.Snapshot[docs.IndexDoc](ctx, api, docs.Index)
+	if err != nil || index == nil {
+		return nil, nil
+	}
+	for _, item := range index.Items {
+		if item.ID == int64(api.ConversationId()) && item.TitleSource != "" && item.TitleSource != "auto" {
+			return nil, nil
+		}
+	}
+	ascending := durable.ScanAscending
+	page, err := api.Entries(ctx, durable.EntryQuery{Order: &ascending}, 100, nil)
+	if err != nil {
+		return nil, nil
+	}
+	firstUser, answer := "", ""
+	for _, entry := range page.Items {
+		for _, message := range entry.Model {
+			switch typed := message.(type) {
+			case ai.UserMessage:
+				if firstUser == "" {
+					firstUser, _ = attachments.SplitUserContent(typed.Content)
+				}
+			case ai.AssistantMessage:
+				if typed.StopReason != ai.StopReasonError && answer == "" {
+					answer = ai.ContentText(typed.Content)
+				}
+			}
+		}
+	}
+	if firstUser == "" || answer == "" {
+		return nil, nil
+	}
+	input, err := durable.ToJsonValue(tasks.TitleInput{FirstUser: firstUser, Answer: answer})
+	if err != nil {
+		return nil, err
+	}
+	return &harness.RunEndTasks{Tasks: []harness.RunEndTask{{
+		Task: tasks.TitleTask.Erased(), Input: input,
+	}}}, nil
+}
+
 // Assistant is the main agent extension.
 var Assistant = harness.DefineExtension(durable.Extension{
 	Name: "assistant",
 	Tools: []*durable.ToolRegistration{
-		FetchPage, WaitSeconds, Todo, Memo, CurrentTime, RemindMe,
+		FetchPage, WaitSeconds, Todo, Memo, CurrentTime, RemindMe, RetitleConversation,
 	},
-	Tasks: []durable.AnyTask{tasks.ReminderTask.Erased(), tasks.ScheduleTask.Erased(), tasks.BackgroundTask.Erased()},
+	Tasks: []durable.AnyTask{
+		tasks.ReminderTask.Erased(), tasks.ScheduleTask.Erased(),
+		tasks.BackgroundTask.Erased(), tasks.TitleTask.Erased(),
+	},
+	Hooks: []durable.HookRegistration{
+		harness.Hook(harness.GenerationTask, &harness.GenerationHooks{AfterRun: autoTitleHook}),
+	},
 	Sections: []*durable.PromptSection{
 		harness.Section("preamble", func(ctx context.Context, input durable.PromptInput) (*string, error) {
 			text := strings.Join([]string{
@@ -417,6 +517,7 @@ var Assistant = harness.DefineExtension(durable.Extension{
 				"Read approved skills with read_skill before following them; propose new ones with propose_skill.",
 				"Use search_knowledge and read_knowledge for the user's notes, and cite paths with line numbers.",
 				"Use fetch_page for public web pages.",
+				"Use retitle_conversation when the user asks to rename the conversation.",
 			}, "\n")
 			return &text, nil
 		}, harness.SectionOptions{Tag: boolPtr(false)}),
