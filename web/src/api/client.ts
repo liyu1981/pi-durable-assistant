@@ -4,11 +4,10 @@ import type {
   ArtifactConfirmations,
   ArtifactFiles,
   ArtifactList,
+  KnowledgeDeleted,
   KnowledgeFileContent,
   KnowledgeFileList,
-  KnowledgeVault,
-  KnowledgeVaultCreated,
-  KnowledgeVaultDelete,
+  KnowledgeVaultChanged,
   KnowledgeVaultList,
   LLMModelsInput,
   LLMProfile,
@@ -274,53 +273,79 @@ function encodeFilePath(filePath: string): string {
   return filePath.split("/").map(encodeURIComponent).join("/");
 }
 
-/** Knowledge subsystem: vault management. */
+/** Knowledge subsystem: user-owned vaults of uploaded files. */
 
-/** List all knowledge vaults. */
+function knowledgeVaultPath(id: string): string {
+  return `/api/knowledge/vaults/${encodeURIComponent(id)}`;
+}
+
+function knowledgeFilePath(id: string, filePath: string): string {
+  return `${knowledgeVaultPath(id)}/files/${encodeFilePath(filePath)}`;
+}
+
+/** List all knowledge vaults with their file totals. */
 export function listKnowledgeVaults(): Promise<KnowledgeVaultList> {
   return get<KnowledgeVaultList>("/api/knowledge/vaults");
 }
 
-/** Create a new knowledge vault with a name and optional description. */
+/** Create a knowledge vault with a name and an optional description. */
 export function createKnowledgeVault(
   name: string,
-  description?: string,
-): Promise<KnowledgeVaultCreated> {
-  return post<KnowledgeVaultCreated>("/api/knowledge/vaults", { name, description });
+  description = "",
+): Promise<KnowledgeVaultChanged> {
+  return post<KnowledgeVaultChanged>("/api/knowledge/vaults", { name, description });
 }
 
-/** Delete a knowledge vault by ID. */
-export function deleteKnowledgeVault(id: string): Promise<KnowledgeVaultDelete> {
-  return request<KnowledgeVaultDelete>(`/api/knowledge/vaults/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+/** Rename a vault and replace its description. */
+export function updateKnowledgeVault(
+  id: string,
+  name: string,
+  description = "",
+): Promise<KnowledgeVaultChanged> {
+  return put<KnowledgeVaultChanged>(knowledgeVaultPath(id), { name, description });
 }
 
-/** List files in a knowledge vault. */
-export function listKnowledgeFiles(vaultId: string): Promise<KnowledgeFileList> {
-  return get<KnowledgeFileList>(`/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files`);
+/** Delete a vault together with every file it holds. */
+export function deleteKnowledgeVault(id: string): Promise<KnowledgeDeleted> {
+  return request<KnowledgeDeleted>(knowledgeVaultPath(id), { method: "DELETE" });
 }
 
-/** Read a knowledge file by vault ID and file path. */
-export function readKnowledgeFile(
-  vaultId: string,
+/** List the files inside one vault. */
+export function listKnowledgeFiles(id: string): Promise<KnowledgeFileList> {
+  return get<KnowledgeFileList>(`${knowledgeVaultPath(id)}/files`);
+}
+
+/** Read one file as text, or as base64 when it is binary. */
+export function readKnowledgeFile(id: string, filePath: string): Promise<KnowledgeFileContent> {
+  return get<KnowledgeFileContent>(knowledgeFilePath(id, filePath));
+}
+
+/** Upload a file. `data` is base64 so any content type survives the JSON body. */
+export function uploadKnowledgeFile(
+  id: string,
   filePath: string,
-): Promise<KnowledgeFileContent> {
-  return get<KnowledgeFileContent>(
-    `/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files/${encodeFilePath(filePath)}`,
-  );
+  data: string,
+): Promise<KnowledgeVaultChanged> {
+  return put<KnowledgeVaultChanged>(knowledgeFilePath(id, filePath), { base64: data });
 }
 
-/** Write/create a knowledge file in a vault. */
+/** Write a UTF-8 text file without base64 encoding. */
 export function writeKnowledgeFile(
-  vaultId: string,
+  id: string,
   filePath: string,
   content: string,
-): Promise<KnowledgeVault> {
-  return put<KnowledgeVault>(
-    `/api/knowledge/vaults/${encodeURIComponent(vaultId)}/files/${encodeFilePath(filePath)}`,
-    { content },
-  );
+): Promise<KnowledgeVaultChanged> {
+  return put<KnowledgeVaultChanged>(knowledgeFilePath(id, filePath), { content });
+}
+
+/** Delete one file from a vault. */
+export function deleteKnowledgeFile(id: string, filePath: string): Promise<KnowledgeDeleted> {
+  return request<KnowledgeDeleted>(knowledgeFilePath(id, filePath), { method: "DELETE" });
+}
+
+/** Direct URL for previewing an uploaded file (images, PDFs, downloads). */
+export function knowledgeRawUrl(id: string, filePath: string): string {
+  return `${knowledgeVaultPath(id)}/raw/${encodeFilePath(filePath)}`;
 }
 
 /** Rename a conversation; user-set titles are not overwritten automatically. */

@@ -2,8 +2,6 @@ import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type {
   Conversation,
-  KnowledgeHit,
-  KnowledgePage,
   LLMProfile,
   Management,
   PersonalData,
@@ -47,8 +45,6 @@ export const steerAtom = atom(false);
 /** Task-center data and UI state. */
 export const managementAtom = atom<Management | null>(null);
 export const personalAtom = atom<PersonalData | null>(null);
-export const knowledgeResultsAtom = atom<KnowledgeHit[]>([]);
-export const knowledgePageAtom = atom<KnowledgePage | null>(null);
 export const leftPanelCollapsedAtom = atomWithStorage("pi.leftPanelCollapsed", false);
 export const rightPanelCollapsedAtom = atomWithStorage("pi.rightPanelCollapsed", false);
 

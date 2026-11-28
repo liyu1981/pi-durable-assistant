@@ -20,7 +20,6 @@ import {
 } from "../atoms";
 import { formatListTime, formatTime } from "../lib/format";
 import { useToast } from "../lib/useToast";
-import { ConversationRename } from "./ConversationRename";
 import { ConfirmDialog, EmptyState } from "./ui";
 
 interface SidebarProps {
@@ -177,17 +176,6 @@ export function Sidebar({ onSelect, onCreated }: SidebarProps) {
                       </span>
                     </button>
                     <div className="flex flex-wrap gap-2">
-                      <ConversationRename
-                        id={item.id}
-                        title={item.title}
-                        onRenamed={(next) =>
-                          setConversations((items) =>
-                            items.map((entry) =>
-                              entry.id === item.id ? { ...entry, title: next } : entry,
-                            ),
-                          )
-                        }
-                      />
                       <Button
                         variant="ghost"
                         size="xs"

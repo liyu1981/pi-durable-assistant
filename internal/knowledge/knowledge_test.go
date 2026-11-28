@@ -1,139 +1,152 @@
 package knowledge
 
 import (
+	"context"
 	"strings"
 	"testing"
-	"sort"
 )
 
-func TestCreateAndListVaults(t *testing.T) {
-	root := t.TempDir()
-	store := NewStore(root)
+func TestVaultLifecycle(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
 
-	// Create a vault
-	vault, err := store.CreateVault("Test Vault", "A test knowledge vault")
+	vault, err := store.CreateVault(ctx, "  Research  ", " Papers I read ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if vault.Name != "Test Vault" {
-		t.Fatalf("vault name %q, want %q", vault.Name, "Test Vault")
-	}
-	if vault.Description != "A test knowledge vault" {
-		t.Fatalf("vault description %q, want %q", vault.Description, "A test knowledge vault")
+	if vault.Name != "Research" || vault.Description != "Papers I read" {
+		t.Fatalf("fields not trimmed: %+v", vault)
 	}
 
-	// List vaults
-	vaults, err := store.ListVaults()
+	vaults, err := store.ListVaults(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vaults) != 1 {
-		t.Fatalf("expected 1 vault, got %d", len(vaults))
-	}
-	if vaults[0].ID != vault.ID {
-		t.Fatalf("vault ID %q, want %q", vaults[0].ID, vault.ID)
+	if len(vaults) != 1 || vaults[0].ID != vault.ID {
+		t.Fatalf("unexpected vaults: %+v", vaults)
 	}
 
-	// Write a file to the vault
-	_, err = store.WriteFile(vault.ID, "note.txt", "Hello Knowledge")
+	updated, err := store.UpdateVault(ctx, vault.ID, "Reading", "Updated description")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// List files
-	files, err := store.ListFiles(vault.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file, got %d", len(files))
-	}
-	if files[0].Path != "note.txt" {
-		t.Fatalf("file path %q, want %q", files[0].Path, "note.txt")
+	if updated.Name != "Reading" || updated.Description != "Updated description" {
+		t.Fatalf("update not applied: %+v", updated)
 	}
 
-	// Read file
-	content, ok, err := store.ReadFile(vault.ID, "note.txt")
-	if err != nil {
+	if err := store.DeleteVault(ctx, vault.ID); err != nil {
 		t.Fatal(err)
 	}
-	if !ok {
-		t.Fatal("file not found")
+	if _, err := store.GetVault(ctx, vault.ID); err == nil {
+		t.Fatal("deleted vault must be gone")
 	}
-	if content != "Hello Knowledge" {
-		t.Fatalf("content %q, want %q", content, "Hello Knowledge")
-	}
-
-	// Delete vault
-	err = store.DeleteVault(vault.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify vault is deleted
-	vaults, err = store.ListVaults()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(vaults) != 0 {
-		t.Fatalf("expected 0 vaults after deletion, got %d", len(vaults))
+	if err := store.DeleteVault(ctx, vault.ID); err == nil {
+		t.Fatal("deleting a missing vault must fail")
 	}
 }
 
-func TestCreateAndListFiles(t *testing.T) {
-	root := t.TempDir()
-	store := NewStore(root)
+func TestVaultValidation(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateVault(ctx, "   ", "x"); err == nil {
+		t.Fatal("empty name must be rejected")
+	}
+	if _, err := store.CreateVault(ctx, strings.Repeat("a", maxNameLen+1), ""); err == nil {
+		t.Fatal("over-long name must be rejected")
+	}
+	if _, err := store.CreateVault(ctx, "ok", strings.Repeat("d", maxDescriptionLen+1)); err == nil {
+		t.Fatal("over-long description must be rejected")
+	}
+	if _, err := store.UpdateVault(ctx, "kv_missing", "name", ""); err != ErrVaultNotFound {
+		t.Fatalf("err = %v, want ErrVaultNotFound", err)
+	}
+}
 
-	// Create a vault
-	vault, err := store.CreateVault("My Vault", "")
+func TestWriteListReadDeleteFiles(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
+	vault, err := store.CreateVault(ctx, "Docs", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Write multiple files
-	_, err = store.WriteFile(vault.ID, "doc1.md", "# Document 1\nContent here")
-	if err != nil {
+	if _, err := store.WriteFile(ctx, vault.ID, "notes/todo.md", []byte("# Todo\n- one")); err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.WriteFile(vault.ID, "doc2.md", "# Document 2\nMore content")
-	if err != nil {
+	// Arbitrary binary content is stored byte for byte.
+	binary := []byte{0x89, 0x50, 0x4e, 0x47, 0x00, 0xff}
+	if _, err := store.WriteFile(ctx, vault.ID, "logo.png", binary); err != nil {
 		t.Fatal(err)
 	}
 
-	// List files
-	files, err := store.ListFiles(vault.ID)
+	files, err := store.ListFiles(ctx, vault.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 2 {
-		t.Fatalf("expected 2 files, got %d", len(files))
+	if len(files) != 2 || files[0].Path != "logo.png" || files[1].Path != "notes/todo.md" {
+		t.Fatalf("unexpected files: %+v", files)
+	}
+	if files[0].MIMEType != "image/png" {
+		t.Fatalf("mime = %q, want image/png", files[0].MIMEType)
 	}
 
-	// Sort check
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.Path
+	data, ok, err := store.ReadFile(ctx, vault.ID, "notes/todo.md")
+	if err != nil || !ok || string(data) != "# Todo\n- one" {
+		t.Fatalf("read = %q ok=%v err=%v", data, ok, err)
 	}
-	sort.Strings(paths)
-	if paths[0] != "doc1.md" || paths[1] != "doc2.md" {
-		t.Fatalf("unexpected file order: %v", paths)
+	if !IsText(data) {
+		t.Fatal("markdown should be detected as text")
+	}
+	raw, ok, err := store.ReadFile(ctx, vault.ID, "logo.png")
+	if err != nil || !ok || string(raw) != string(binary) {
+		t.Fatalf("binary read lost bytes: %v %v", ok, err)
+	}
+	if IsText(raw) {
+		t.Fatal("png bytes must not be detected as text")
+	}
+	if _, ok, _ := store.ReadFile(ctx, vault.ID, "missing.txt"); ok {
+		t.Fatal("missing file must report ok=false")
 	}
 
-	// Read a file
-	content, ok, err := store.ReadFile(vault.ID, "doc1.md")
+	// Totals are recomputed for display.
+	after, err := store.GetVault(ctx, vault.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok {
-		t.Fatal("file not found")
-	}
-	if !strings.HasPrefix(content, "# Document 1") {
-		t.Fatalf("unexpected content: %q", content)
+	if after.FileCount != 2 || after.SizeBytes != int64(len(data)+len(binary)) {
+		t.Fatalf("totals = %d files, %d bytes", after.FileCount, after.SizeBytes)
 	}
 
-	// Delete vault
-	err = store.DeleteVault(vault.ID)
+	if err := store.DeleteFile(ctx, vault.ID, "logo.png"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := store.ReadFile(ctx, vault.ID, "logo.png"); ok {
+		t.Fatal("deleted file still readable")
+	}
+	if err := store.DeleteFile(ctx, vault.ID, "logo.png"); err == nil {
+		t.Fatal("deleting a missing file must fail")
+	}
+}
+
+func TestFilePathsCannotEscapeTheVault(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(t.TempDir())
+	vault, err := store.CreateVault(ctx, "Safe", "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"", ".", "..", "../escape.txt", "a/../../escape.txt",
+		"/etc/passwd", "a\\b.txt", "dir/../../escape.txt",
+	} {
+		if _, err := store.WriteFile(ctx, vault.ID, name, []byte("x")); err == nil {
+			t.Fatalf("write %q must be rejected", name)
+		}
+		if _, ok, err := store.ReadFile(ctx, vault.ID, name); err == nil || ok {
+			t.Fatalf("read %q must be rejected", name)
+		}
+	}
+	if _, err := store.WriteFile(ctx, "kv_unknown", "a.txt", []byte("x")); err != ErrVaultNotFound {
+		t.Fatalf("err = %v, want ErrVaultNotFound", err)
 	}
 }

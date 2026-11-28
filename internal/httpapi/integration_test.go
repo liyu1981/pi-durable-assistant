@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -142,7 +143,7 @@ func TestConversationShelfRoutes(t *testing.T) {
 func TestPersonalRoutes(t *testing.T) {
 	client := newTestServer(t)
 	status, body := client.do("GET", "/api/personal", nil)
-	if status != http.StatusOK || len(body) != 3 {
+	if status != http.StatusOK || len(body) != 2 || body["memory"] == nil || body["skills"] == nil {
 		t.Fatalf("personal status: %d %v", status, body)
 	}
 	status, body = client.do("POST", "/api/personal/memory", map[string]any{"text": "Remember me", "source": "user", "requestId": "memo-1"})
@@ -457,5 +458,137 @@ func TestRenameConversationRoute(t *testing.T) {
 	status, _ = client.do("PUT", fmt.Sprintf("/api/conversations/%d/title", id), map[string]any{"title": ""})
 	if status != http.StatusBadRequest {
 		t.Fatalf("empty title should be rejected: %d", status)
+	}
+}
+
+func TestKnowledgeVaultRoutes(t *testing.T) {
+	client := newTestServer(t)
+
+	status, body := client.do("GET", "/api/knowledge/vaults", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list vaults: %d %v", status, body)
+	}
+	if vaults, ok := body["vaults"].([]any); !ok || len(vaults) != 0 {
+		t.Fatalf("expected no vaults: %v", body)
+	}
+
+	status, body = client.do("POST", "/api/knowledge/vaults", map[string]any{
+		"name": "Research", "description": "Papers and notes",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create vault: %d %v", status, body)
+	}
+	vault := body["vault"].(map[string]any)
+	id, _ := vault["id"].(string)
+	if id == "" || vault["name"] != "Research" || vault["description"] != "Papers and notes" {
+		t.Fatalf("unexpected vault: %v", vault)
+	}
+
+	status, body = client.do("POST", "/api/knowledge/vaults", map[string]any{"name": "  "})
+	if status != http.StatusBadRequest {
+		t.Fatalf("empty name must be rejected: %d %v", status, body)
+	}
+
+	status, body = client.do("PUT", "/api/knowledge/vaults/"+id, map[string]any{
+		"name": "Reading", "description": "Updated",
+	})
+	if status != http.StatusOK || body["vault"].(map[string]any)["name"] != "Reading" {
+		t.Fatalf("update vault: %d %v", status, body)
+	}
+
+	status, body = client.do("PUT", "/api/knowledge/vaults/"+id+"/files/notes/todo.md", map[string]any{
+		"content": "# Todo",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("write text file: %d %v", status, body)
+	}
+	if got := body["vault"].(map[string]any)["fileCount"].(float64); got != 1 {
+		t.Fatalf("file count after write = %v", got)
+	}
+
+	// Binary uploads travel as base64 and come back byte for byte.
+	binary := base64.StdEncoding.EncodeToString([]byte{0x00, 0x01, 0xfe, 0xff})
+	status, body = client.do("PUT", "/api/knowledge/vaults/"+id+"/files/raw/data.bin", map[string]any{
+		"base64": binary,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("write binary file: %d %v", status, body)
+	}
+
+	status, body = client.do("GET", "/api/knowledge/vaults/"+id+"/files", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list files: %d %v", status, body)
+	}
+	files, ok := body["files"].([]any)
+	if !ok || len(files) != 2 {
+		t.Fatalf("unexpected files: %v", body)
+	}
+
+	status, body = client.do("GET", "/api/knowledge/vaults/"+id+"/files/notes/todo.md", nil)
+	if status != http.StatusOK || body["content"] != "# Todo" || body["isText"] != true {
+		t.Fatalf("read text file: %d %v", status, body)
+	}
+	status, body = client.do("GET", "/api/knowledge/vaults/"+id+"/files/raw/data.bin", nil)
+	if status != http.StatusOK || body["isText"] != false || body["contentBase64"] != binary {
+		t.Fatalf("read binary file: %d %v", status, body)
+	}
+
+	// Path traversal must be refused even when the router cleans the path.
+	status, _ = client.do("GET", "/api/knowledge/vaults/"+id+"/files/..%2F..%2Fescape.txt", nil)
+	if status == http.StatusOK {
+		t.Fatalf("traversal read must fail: %d", status)
+	}
+
+	status, body = client.do("DELETE", "/api/knowledge/vaults/"+id+"/files/raw/data.bin", nil)
+	if status != http.StatusOK {
+		t.Fatalf("delete file: %d %v", status, body)
+	}
+
+	status, body = client.do("DELETE", "/api/knowledge/vaults/"+id, nil)
+	if status != http.StatusOK {
+		t.Fatalf("delete vault: %d %v", status, body)
+	}
+	status, _ = client.do("GET", "/api/knowledge/vaults/"+id+"/files", nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("deleted vault listing should 404: %d", status)
+	}
+}
+
+func TestKnowledgeRawRouteServesBytes(t *testing.T) {
+	client := newTestServer(t)
+	status, body := client.do("POST", "/api/knowledge/vaults", map[string]any{"name": "Assets"})
+	if status != http.StatusCreated {
+		t.Fatalf("create vault: %d %v", status, body)
+	}
+	id := body["vault"].(map[string]any)["id"].(string)
+	status, _ = client.do("PUT", "/api/knowledge/vaults/"+id+"/files/img/logo.svg", map[string]any{
+		"content": `<svg xmlns="http://www.w3.org/2000/svg"/>`,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("write svg: %d", status)
+	}
+
+	request, err := http.NewRequest("GET", client.base+"/api/knowledge/vaults/"+id+"/raw/img/logo.svg", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.SetBasicAuth("demo", "secret")
+	response, err := client.client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("raw bytes: %d", response.StatusCode)
+	}
+	if got := response.Header.Get("content-type"); !strings.HasPrefix(got, "image/svg+xml") {
+		t.Fatalf("content-type = %q", got)
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "<svg") {
+		t.Fatalf("unexpected raw bytes: %q", payload)
 	}
 }

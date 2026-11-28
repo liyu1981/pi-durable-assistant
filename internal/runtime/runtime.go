@@ -177,7 +177,7 @@ func Open(ctx context.Context, cfg config.Config) (*Runtime, error) {
 		return nil, err
 	}
 	knowledgeStore := knowledge.NewStore(filepath.Join(cfg.DataDir, "knowledge"))
-	if _, err := knowledgeStore.ListVaults(); err != nil {
+	if _, err := knowledgeStore.ListVaults(ctx); err != nil {
 		return nil, err
 	}
 	confirmationStore := artifacts.NewConfirmationStore(filepath.Join(cfg.DataDir, "artifact-confirmations.json"))

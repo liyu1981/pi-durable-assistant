@@ -210,13 +210,6 @@ export interface SkillItem {
   decidedAt: number | null;
 }
 
-export interface KnowledgeStatus {
-  enabled: boolean;
-  reason?: string;
-  root?: string;
-  allow: string[];
-}
-
 /** One entry of `GET /api/tools`: a tool the agent can call. */
 export interface ToolInfo {
   name: string;
@@ -235,43 +228,17 @@ export interface ToolsData {
 export interface PersonalData {
   memory: MemoryItem[];
   skills: SkillItem[];
-  knowledge: KnowledgeStatus;
 }
 
-export interface KnowledgeHit {
-  path: string;
-  status: string;
-  revision: string;
-  line: number;
-  endLine: number;
-  excerpt: string;
-  score: number;
-}
-
-export interface KnowledgeSearchResult {
-  query: string;
-  includeHistorical: boolean;
-  hits: KnowledgeHit[];
-}
-
-export interface KnowledgePage {
-  path: string;
-  status: string;
-  revision: string;
-  startLine: number;
-  endLine: number;
-  text: string;
-  truncated: boolean;
-}
-
-/** Knowledge vault metadata. */
+/** Knowledge vault metadata, including file totals for display. */
 export interface KnowledgeVault {
   id: string;
   name: string;
+  description: string;
   createdAt: number;
   updatedAt: number;
-  pinned: boolean;
-  description: string;
+  fileCount: number;
+  sizeBytes: number;
 }
 
 /** Summary of a file inside a knowledge vault. */
@@ -293,22 +260,24 @@ export interface KnowledgeFileList {
   files: KnowledgeFileInfo[];
 }
 
-/** Response for reading a knowledge file. */
+/** Response for reading a knowledge file: text or base64, never both. */
 export interface KnowledgeFileContent {
-  content: string;
   vaultId: string;
   path: string;
   sizeBytes: number;
   mimeType: string;
+  isText: boolean;
+  content?: string;
+  contentBase64?: string;
 }
 
-/** Response for creating a knowledge vault. */
-export interface KnowledgeVaultCreated {
+/** Response for creating or updating a knowledge vault. */
+export interface KnowledgeVaultChanged {
   vault: KnowledgeVault;
 }
 
-/** Response for deleting a knowledge vault. */
-export interface KnowledgeVaultDelete {
+/** Response for deleting a knowledge vault or one of its files. */
+export interface KnowledgeDeleted {
   ok: boolean;
 }
 

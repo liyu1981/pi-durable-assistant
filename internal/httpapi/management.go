@@ -398,7 +398,6 @@ func (s *Server) getPersonal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"memory": personal.PublicDoc(memory), "skills": personal.PublicDoc(skills),
-		"knowledge": map[string]any{"enabled": false, "reason": "Obsidian knowledge disabled; use knowledge vaults"},
 	})
 }
 
@@ -481,14 +480,6 @@ func (s *Server) decidePersonal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"item": item})
-}
-
-func (s *Server) searchKnowledge(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusBadRequest, "knowledge vault search is available via /api/knowledge/vaults endpoint; Obsidian search is disabled")
-}
-
-func (s *Server) readKnowledge(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusBadRequest, "knowledge file read is available via /api/knowledge/vaults/{id}/files/{path} endpoint; Obsidian read is disabled")
 }
 
 func decodeDoc[T any](draft *delta.Object) (T, error) {
